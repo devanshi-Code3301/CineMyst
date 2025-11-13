@@ -17,14 +17,7 @@ final class SessionDetailViewController: UIViewController {
     private let scrollView = UIScrollView()
     private let content = UIStackView()
 
-    private let backButton: UIButton = {
-        let b = UIButton(type: .system)
-        b.setTitle("‹", for: .normal)
-        b.titleLabel?.font = UIFont.systemFont(ofSize: 28, weight: .semibold)
-        b.translatesAutoresizingMaskIntoConstraints = false
-        return b
-    }()
-
+    // Large local title (we keep it in the view; nav bar left button handles back)
     private let titleLabel: UILabel = {
         let l = UILabel()
         l.text = "My Session"
@@ -67,7 +60,7 @@ final class SessionDetailViewController: UIViewController {
 
         let label = UILabel()
         label.font = UIFont.systemFont(ofSize: 14, weight: .semibold)
-        label.text = "4.9" // placeholder; we don't have rating on Session — you can change if available
+        label.text = "4.9"
         label.translatesAutoresizingMaskIntoConstraints = false
 
         let s = UIStackView(arrangedSubviews: [star, label])
@@ -78,7 +71,7 @@ final class SessionDetailViewController: UIViewController {
         return s
     }()
 
-    // Section heading
+    // Section heading helper
     private func sectionHeader(_ text: String) -> UILabel {
         let l = UILabel()
         l.text = text
@@ -87,17 +80,16 @@ final class SessionDetailViewController: UIViewController {
         return l
     }
 
-    // Session detail rows
     private let sessionTypeRow = DetailRowView(iconName: "calendar.badge.clock", title: "1-hour session", subtitle: "")
     private let meetingRow = DetailRowView(iconName: "video", title: "Virtual Meeting", subtitle: "Link shared on your mail id")
     private let areaRow = DetailRowView(iconName: "mappin.and.ellipse", title: "Mentorship Area", subtitle: "")
 
-    // action buttons
-    private let rescheduleButton: UIButton = {
+    // Both buttons now use the same filled style so backgrounds match
+    private lazy var rescheduleButton: UIButton = {
         var cfg = UIButton.Configuration.filled()
         cfg.cornerStyle = .capsule
         cfg.title = "Reschedule"
-        cfg.baseBackgroundColor = UIColor(red: 0x43/255.0, green: 0x16/255.0, blue: 0x31/255.0, alpha: 1)
+        cfg.baseBackgroundColor = plum
         cfg.baseForegroundColor = .white
         let b = UIButton(configuration: cfg)
         b.translatesAutoresizingMaskIntoConstraints = false
@@ -105,13 +97,13 @@ final class SessionDetailViewController: UIViewController {
         return b
     }()
 
-    private let cancelButton: UIButton = {
-        let b = UIButton(type: .system)
-        b.setTitle("Cancel", for: .normal)
-        b.titleLabel?.font = UIFont.systemFont(ofSize: 16, weight: .semibold)
-        b.layer.cornerRadius = 12
-        b.layer.borderWidth = 1
-        b.layer.borderColor = UIColor.systemGray4.cgColor
+    private lazy var cancelButton: UIButton = {
+        var cfg = UIButton.Configuration.filled()
+        cfg.cornerStyle = .capsule
+        cfg.title = "Cancel"
+        cfg.baseBackgroundColor = plum   // same background color as Reschedule
+        cfg.baseForegroundColor = .white
+        let b = UIButton(configuration: cfg)
         b.translatesAutoresizingMaskIntoConstraints = false
         b.heightAnchor.constraint(equalToConstant: 46).isActive = true
         return b
@@ -121,50 +113,55 @@ final class SessionDetailViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .systemBackground
+
+        // Hide default back (the nav controller's back) and provide a single custom left item:
+        navigationItem.hidesBackButton = true
+        navigationItem.leftBarButtonItem = UIBarButtonItem(
+            image: UIImage(systemName: "chevron.left"),
+            style: .plain,
+            target: self,
+            action: #selector(didTapBack)
+        )
+
         setupLayout()
         populate()
-        backButton.addTarget(self, action: #selector(didTapBack), for: .touchUpInside)
+
         rescheduleButton.addTarget(self, action: #selector(didTapReschedule), for: .touchUpInside)
         cancelButton.addTarget(self, action: #selector(didTapCancel), for: .touchUpInside)
     }
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        // Hide tab bar
+        tabBarController?.tabBar.isHidden = true
+    }
 
-    // MARK: populate UI from session
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        // Show tab bar again
+        tabBarController?.tabBar.isHidden = false
+    }
+
     private func populate() {
-        // image
         let img = UIImage(named: session.mentorImageName) ?? UIImage(named: "Image")
         imageView.image = img
-        // name/role
         nameLabel.text = session.mentorName
         roleLabel.text = session.mentorRole ?? ""
-        // rating: if you track rating, set it here. Left as static unless you have rating value.
         if let ratingLabel = ratingStack.arrangedSubviews[1] as? UILabel {
             ratingLabel.text = "4.8"
         }
-        // sessionTypeRow.title we keep same (could be made dynamic)
-        // date formatting
         let df = DateFormatter()
         df.dateStyle = .full
         df.timeStyle = .short
         sessionTypeRow.subtitleLabel.text = df.string(from: session.date)
-
-        // areaRow show some sample tags (you can replace with real data)
-        areaRow.subtitleLabel.text = "" // we'll show tags below instead
     }
 
-    // MARK: layout
     private func setupLayout() {
-        // top area with back + title
-        view.addSubview(backButton)
+        // top system title is handled by navigation bar left item; keep big title inside view
         view.addSubview(titleLabel)
 
         NSLayoutConstraint.activate([
-            backButton.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8),
-            backButton.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 12),
-            backButton.widthAnchor.constraint(equalToConstant: 36),
-            backButton.heightAnchor.constraint(equalToConstant: 36),
-
-            titleLabel.centerYAnchor.constraint(equalTo: backButton.centerYAnchor),
-            titleLabel.leadingAnchor.constraint(equalTo: backButton.trailingAnchor, constant: 8)
+            titleLabel.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8),
+            titleLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16)
         ])
 
         // scroll + content stack
@@ -177,7 +174,7 @@ final class SessionDetailViewController: UIViewController {
         scrollView.addSubview(content)
 
         NSLayoutConstraint.activate([
-            scrollView.topAnchor.constraint(equalTo: backButton.bottomAnchor, constant: 12),
+            scrollView.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 12),
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             scrollView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
@@ -188,7 +185,7 @@ final class SessionDetailViewController: UIViewController {
             content.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor, constant: -20)
         ])
 
-        // hero image
+        // hero image container
         let imageContainer = UIView()
         imageContainer.translatesAutoresizingMaskIntoConstraints = false
         imageContainer.addSubview(imageView)
@@ -208,15 +205,17 @@ final class SessionDetailViewController: UIViewController {
         metaStack.alignment = .center
         metaStack.translatesAutoresizingMaskIntoConstraints = false
 
-        // Session details header
+        // session header
         let sessionHeader = sectionHeader("Session Details")
 
-        // mentorship area tags (simple horizontal stack)
+        // mentorship area tags — make equal width
         let tag1 = TagView(title: "Acting")
         let tag2 = TagView(title: "Dubbing")
+
         let tagStack = UIStackView(arrangedSubviews: [tag1, tag2])
         tagStack.axis = .horizontal
-        tagStack.spacing = 10
+        tagStack.spacing = 12
+        tagStack.distribution = .fillEqually   // <- equal widths
         tagStack.translatesAutoresizingMaskIntoConstraints = false
 
         // buttons row
@@ -226,23 +225,21 @@ final class SessionDetailViewController: UIViewController {
         buttonsRow.distribution = .fillEqually
         buttonsRow.translatesAutoresizingMaskIntoConstraints = false
 
-        // assemble content
+        // assemble
         content.addArrangedSubview(imageContainer)
         content.addArrangedSubview(metaStack)
         content.setCustomSpacing(8, after: metaStack)
-
-        // session specifics
         content.addArrangedSubview(sessionHeader)
         content.addArrangedSubview(sessionTypeRow)
         content.addArrangedSubview(meetingRow)
         content.addArrangedSubview(areaRow)
         content.addArrangedSubview(tagStack)
 
-        // add spacer and buttons
         let spacer = UIView()
         spacer.translatesAutoresizingMaskIntoConstraints = false
         spacer.heightAnchor.constraint(equalToConstant: 16).isActive = true
         content.addArrangedSubview(spacer)
+
         content.addArrangedSubview(buttonsRow)
     }
 
@@ -252,21 +249,15 @@ final class SessionDetailViewController: UIViewController {
     }
 
     @objc private func didTapReschedule() {
-        // implement reschedule flow (present calendar/schedule view). For demo:
         let a = UIAlertController(title: "Reschedule", message: "Reschedule tapped", preferredStyle: .alert)
         a.addAction(UIAlertAction(title: "OK", style: .default))
         present(a, animated: true)
     }
 
     @objc private func didTapCancel() {
-        // implement cancellation (call API or remove from SessionStore)
         let ac = UIAlertController(title: "Cancel Session", message: "Are you sure you want to cancel this session?", preferredStyle: .alert)
         ac.addAction(UIAlertAction(title: "Yes, cancel", style: .destructive, handler: { _ in
-            // remove from SessionStore (demo)
             SessionStore.shared.remove(id: self.session.id)
-            self.navigationController?.popViewController(animated: true)
-
-            NotificationCenter.default.post(name: .sessionCreated, object: nil, userInfo: nil) // trigger reload upstream
             self.navigationController?.popViewController(animated: true)
         }))
         ac.addAction(UIAlertAction(title: "No", style: .cancel))
@@ -274,7 +265,7 @@ final class SessionDetailViewController: UIViewController {
     }
 }
 
-// MARK: small helper views used above
+// MARK: helper views
 
 private final class DetailRowView: UIView {
     private let iconView = UIImageView()
@@ -322,10 +313,12 @@ private final class DetailRowView: UIView {
 }
 
 private final class TagView: UIView {
+    private let label = UILabel()
+
     init(title: String) {
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
-        let label = UILabel()
+
         label.text = title
         label.font = UIFont.systemFont(ofSize: 13, weight: .semibold)
         label.textAlignment = .center
@@ -342,7 +335,7 @@ private final class TagView: UIView {
             label.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -8),
             label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
             label.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
-            widthAnchor.constraint(greaterThanOrEqualToConstant: 80)
+            heightAnchor.constraint(equalToConstant: 44)
         ])
     }
 
