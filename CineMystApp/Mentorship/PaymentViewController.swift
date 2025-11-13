@@ -1,3 +1,11 @@
+//
+//  PaymentViewController.swift
+//  CineMystApp
+//
+//  Created by You on Today.
+//  Updated: hide tab bar & floating button while payment screen is visible.
+//
+
 import UIKit
 
 final class PaymentViewController: UIViewController {
@@ -38,6 +46,7 @@ final class PaymentViewController: UIViewController {
     private let segment: UISegmentedControl = {
         let s = UISegmentedControl(items: ["Card", "UPI"])
         s.selectedSegmentIndex = 0
+        s.translatesAutoresizingMaskIntoConstraints = false
         return s
     }()
 
@@ -89,6 +98,7 @@ final class PaymentViewController: UIViewController {
         c.contentInsets = NSDirectionalEdgeInsets(top: 12, leading: 14, bottom: 12, trailing: 14)
         let b = UIButton(configuration: c)
         b.heightAnchor.constraint(equalToConstant: 48).isActive = true
+        b.translatesAutoresizingMaskIntoConstraints = false
         return b
     }()
 
@@ -99,23 +109,32 @@ final class PaymentViewController: UIViewController {
         navigationItem.title = ""
         navigationItem.backButtonDisplayMode = .minimal
         view.tintColor = accentGray
-        
+
         setupLayout()
         setupCard()
         wireActions()
-        
+
         payButton.configuration?.baseBackgroundColor = plum
     }
+
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        // Hide the floating + button when entering Mentorship screens
-        (tabBarController as? CineMystTabBarController)?.setFloatingButtonVisible(false)
+
+        // Hide the tab bar and floating + button while on payment screen
+        tabBarController?.tabBar.isHidden = true
+        if let cineTab = tabBarController as? CineMystTabBarController {
+            cineTab.setFloatingButtonVisible(false, animated: false)
+        }
     }
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
-        // Show the + button again when leaving Mentorship tab
-        (tabBarController as? CineMystTabBarController)?.setFloatingButtonVisible(true)
+
+        // Restore tab bar and floating + button when leaving
+        tabBarController?.tabBar.isHidden = false
+        if let cineTab = tabBarController as? CineMystTabBarController {
+            cineTab.setFloatingButtonVisible(true, animated: false)
+        }
     }
 
     // MARK: Actions
@@ -138,7 +157,10 @@ final class PaymentViewController: UIViewController {
         Time: \(selectedTime ?? "-")
         """
         let a = UIAlertController(title: "Payment success", message: summary, preferredStyle: .alert)
-        a.addAction(UIAlertAction(title: "Done", style: .default))
+        a.addAction(UIAlertAction(title: "Done", style: .default, handler: { _ in
+            // optional: pop back to mentorship home after payment
+            self.navigationController?.popToRootViewController(animated: true)
+        }))
         present(a, animated: true)
     }
 
@@ -146,7 +168,6 @@ final class PaymentViewController: UIViewController {
     private func setupLayout() {
         // bottom Pay button
         view.addSubview(payButton)
-        payButton.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
             payButton.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
             payButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
@@ -178,6 +199,7 @@ final class PaymentViewController: UIViewController {
         let segContainer = UIView()
         segContainer.backgroundColor = UIColor.secondarySystemBackground
         segContainer.layer.cornerRadius = 12
+        segContainer.translatesAutoresizingMaskIntoConstraints = false
         segContainer.addSubview(segment)
         segment.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
@@ -261,12 +283,9 @@ final class PaymentViewController: UIViewController {
         }
         let dots = UIStackView(arrangedSubviews: [dot1, dot2])
         dots.axis = .horizontal; dots.spacing = -6
+        dots.translatesAutoresizingMaskIntoConstraints = false
 
-        cardView.addSubview(cardHolder)
-        cardView.addSubview(cardNumber)
-        cardView.addSubview(cardExpiry)
-        cardView.addSubview(cardCVV)
-        cardView.addSubview(dots)
+        [cardHolder, cardNumber, cardExpiry, cardCVV, dots].forEach { cardView.addSubview($0) }
 
         NSLayoutConstraint.activate([
             cardHolder.topAnchor.constraint(equalTo: cardView.topAnchor, constant: 16),

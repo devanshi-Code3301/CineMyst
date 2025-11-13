@@ -1,6 +1,18 @@
+//
+//  BookViewController.swift
+//  CineMystApp
+//
+//  Created by You on Today.
+//
+
 import UIKit
 
 final class BookViewController: UIViewController {
+
+    // Public property - set before presenting/pushing
+    var mentor: Mentor? {
+        didSet { applyMentorIfNeeded() }
+    }
 
     // MARK: - UI
     private let scrollView = UIScrollView()
@@ -8,7 +20,7 @@ final class BookViewController: UIViewController {
 
     private let headerImageView: UIImageView = {
         let iv = UIImageView()
-        iv.image = UIImage(named: "Image") // replace with your asset
+        iv.image = UIImage(named: "Image")
         iv.contentMode = .scaleAspectFill
         iv.clipsToBounds = true
         return iv
@@ -17,7 +29,7 @@ final class BookViewController: UIViewController {
 
     private let nameLabel: UILabel = {
         let l = UILabel()
-        l.text = "Juliet Andrea"
+        l.text = ""
         l.font = .systemFont(ofSize: 28, weight: .bold)
         l.textAlignment = .center
         l.numberOfLines = 0
@@ -26,7 +38,7 @@ final class BookViewController: UIViewController {
 
     private let roleLabel: UILabel = {
         let l = UILabel()
-        l.text = "Senior Director"
+        l.text = ""
         l.font = .systemFont(ofSize: 14, weight: .regular)
         l.textColor = .secondaryLabel
         l.textAlignment = .center
@@ -42,7 +54,8 @@ final class BookViewController: UIViewController {
         return b
     }()
 
-    private lazy var starsView: UIStackView = {
+    // starsView is a placeholder stack we can update when mentor is set
+    private var starsView: UIStackView = {
         starStack(rating: 4.0, max: 5, size: 16)
     }()
 
@@ -55,7 +68,6 @@ final class BookViewController: UIViewController {
         return l
     }()
 
-    // Stats
     private func statBlock(title: String, value: String) -> UIStackView {
         let valueLabel = UILabel()
         valueLabel.text = value
@@ -90,7 +102,6 @@ final class BookViewController: UIViewController {
         return h
     }()
 
-    // About
     private let aboutTitle: UILabel = sectionTitle("About")
     private let aboutText: UILabel = {
         let l = UILabel()
@@ -102,7 +113,6 @@ As a Senior Director, I lead cross-functional teams to craft user-centered digit
         return l
     }()
 
-    // Mentorship Area (plain text)
     private let mentorshipTitle: UILabel = sectionTitle("Mentorship Area")
     private let mentorshipText: UILabel = {
         let l = UILabel()
@@ -112,7 +122,6 @@ As a Senior Director, I lead cross-functional teams to craft user-centered digit
         return l
     }()
 
-    // Reviews
     private let reviewsTitle: UILabel = sectionTitle("Reviews")
     private lazy var reviewOne = reviewView(
         avatar: UIImage(systemName: "person.circle"),
@@ -142,15 +151,14 @@ As a Senior Director, I lead cross-functional teams to craft user-centered digit
         var config = UIButton.Configuration.filled()
         config.title = "Book Session"
         config.cornerStyle = .capsule
-        // #431631
         config.baseBackgroundColor = UIColor(red: 0x43/255.0, green: 0x16/255.0, blue: 0x31/255.0, alpha: 1.0)
         config.baseForegroundColor = .white
         let b = UIButton(configuration: config)
         b.heightAnchor.constraint(equalToConstant: 48).isActive = true
         b.configurationUpdateHandler = { button in
             button.configuration?.baseBackgroundColor = button.isHighlighted
-            ? UIColor(red: 0x43/255.0, green: 0x16/255.0, blue: 0x31/255.0, alpha: 0.85)
-            : UIColor(red: 0x43/255.0, green: 0x16/255.0, blue: 0x31/255.0, alpha: 1.0)
+                ? UIColor(red: 0x43/255.0, green: 0x16/255.0, blue: 0x31/255.0, alpha: 0.85)
+                : UIColor(red: 0x43/255.0, green: 0x16/255.0, blue: 0x31/255.0, alpha: 1.0)
         }
         return b
     }()
@@ -159,23 +167,48 @@ As a Senior Director, I lead cross-functional teams to craft user-centered digit
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .systemGroupedBackground
-        // Image under notch
         scrollView.contentInsetAdjustmentBehavior = .never
         navigationController?.navigationBar.isTranslucent = true
 
-        setupLayout()
+        // DO NOT show the nav title over the image
+        navigationItem.title = ""
+        if #available(iOS 14.0, *) {
+            navigationItem.backButtonDisplayMode = .minimal
+        } else {
+            navigationController?.navigationBar.topItem?.title = ""
+        }
 
-        // Navigate to schedule screen
+        setupLayout()
         bookButton.addTarget(self, action: #selector(didTapBookSession), for: .touchUpInside)
+
+        applyMentorIfNeeded()
     }
-    
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+
+        // Hide tab bar (if this VC was pushed with hidesBottomBarWhenPushed = true it will be hidden automatically)
+        tabBarController?.tabBar.isHidden = true
+        // Hide the floating button if our tab bar controller is CineMystTabBarController
+        if let cineTab = tabBarController as? CineMystTabBarController {
+            cineTab.setFloatingButtonVisible(false, animated: false)
+        }
+
+        // Transparent navigation bar
         let appearance = UINavigationBarAppearance()
         appearance.configureWithTransparentBackground()
         navigationController?.navigationBar.standardAppearance = appearance
         navigationController?.navigationBar.scrollEdgeAppearance = appearance
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+
+        // Restore tab bar and floating button
+        tabBarController?.tabBar.isHidden = false
+        if let cineTab = tabBarController as? CineMystTabBarController {
+            cineTab.setFloatingButtonVisible(true, animated: false)
+        }
     }
 
     override func viewDidLayoutSubviews() {
@@ -183,18 +216,18 @@ As a Senior Director, I lead cross-functional teams to craft user-centered digit
         headerHeightConstraint?.constant = 260 + view.safeAreaInsets.top
     }
 
-    // MARK: - Actions
+    // MARK: Actions
     @objc private func didTapBookSession() {
-        let vc = ScheduleSessionViewController() // make sure this file exists
+        let vc = ScheduleSessionViewController() // ensure this exists in your project
         navigationController?.pushViewController(vc, animated: true)
     }
 
-    // MARK: - Layout
+    // MARK: Layout
     private func setupLayout() {
         view.addSubview(scrollView)
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
-            scrollView.topAnchor.constraint(equalTo: view.topAnchor), // under notch
+            scrollView.topAnchor.constraint(equalTo: view.topAnchor),
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             scrollView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -72)
@@ -275,6 +308,45 @@ As a Senior Director, I lead cross-functional teams to craft user-centered digit
             bookButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -12),
             bookButton.heightAnchor.constraint(equalToConstant: 48)
         ])
+    }
+
+    // Called when mentor is set (and after view loads)
+    private func applyMentorIfNeeded() {
+        guard isViewLoaded else { return }
+        applyMentor()
+    }
+
+    private func applyMentor() {
+        guard let mentor = mentor else { return }
+
+        // DO NOT set navigation title here (we previously did `title = mentor.name` which caused the label on the image).
+        // Keep the name inside the card only:
+        nameLabel.text = mentor.name
+        roleLabel.text = mentor.role
+
+        updateStarsView(with: mentor.rating)
+
+        if let imgName = mentor.imageName, let img = UIImage(named: imgName) {
+            headerImageView.image = img
+            headerImageView.contentMode = .scaleAspectFill
+        } else {
+            headerImageView.image = UIImage(systemName: "person.crop.rectangle")
+            headerImageView.tintColor = .systemGray3
+            headerImageView.contentMode = .center
+        }
+    }
+
+    private func updateStarsView(with rating: Double) {
+        // clear existing arranged subviews
+        while !starsView.arrangedSubviews.isEmpty {
+            let v = starsView.arrangedSubviews[0]
+            starsView.removeArrangedSubview(v)
+            v.removeFromSuperview()
+        }
+        let new = starStack(rating: rating, max: 5, size: 16)
+        for v in new.arrangedSubviews {
+            starsView.addArrangedSubview(v)
+        }
     }
 }
 

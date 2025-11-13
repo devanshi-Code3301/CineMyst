@@ -1,5 +1,14 @@
+//
+//  ScheduleSessionViewController.swift
+//  CineMystApp
+//
+//  Updated: compact "Choose Date" header + modal date sheet.
+//  Time slots are added to the stack only after the user picks a date — no phantom space.
+//
+
 import UIKit
 import UniformTypeIdentifiers
+import ObjectiveC
 
 // MARK: - Mentorship Enum
 enum MentorshipArea: String, CaseIterable {
@@ -17,10 +26,15 @@ final class ScheduleSessionViewController: UIViewController {
     // MARK: - State
     private var selectedArea: MentorshipArea?
     private var selectedTimeButton: UIButton?
+    /// Date will be nil until user explicitly picks a date via the sheet
+    private var selectedDate: Date?
 
-    // MARK: - UI
+    // MARK: - UI (keep references for insertion)
     private let scrollView = UIScrollView()
     private let contentView = UIView()
+
+    private var mainStack: UIStackView!               // main content stack (we'll insert into this)
+    private var headerRow: UIView!                    // header row (date header + chevron), used as insertion anchor
 
     private let titleLabel: UILabel = {
         let l = UILabel()
@@ -29,7 +43,7 @@ final class ScheduleSessionViewController: UIViewController {
         return l
     }()
 
-    // Mentorship (chips)
+    // Mentorship chips
     private let mentorshipTitle = ScheduleSessionViewController.sectionTitle("Mentorship Area")
     private let mentorshipStack: UIStackView = {
         let s = UIStackView()
@@ -38,33 +52,53 @@ final class ScheduleSessionViewController: UIViewController {
         return s
     }()
 
-    // Choose Date
+    // Choose Date header + chevron (compact)
     private let chooseDateTitle = ScheduleSessionViewController.sectionTitle("Choose Date")
-    private let datePicker: UIDatePicker = {
-        let p = UIDatePicker()
-        p.datePickerMode = .date
-        if #available(iOS 14.0, *) { p.preferredDatePickerStyle = .inline }
-        p.minimumDate = Date()
-        return p
+
+    private lazy var dateHeaderButton: UIButton = {
+        let b = UIButton(type: .system)
+        b.contentHorizontalAlignment = .left
+        b.tintColor = .label
+        b.titleLabel?.font = .systemFont(ofSize: 18, weight: .semibold)
+        b.setTitleColor(.label, for: .normal)
+        b.addTarget(self, action: #selector(presentDatePickerSheet), for: .touchUpInside)
+        b.translatesAutoresizingMaskIntoConstraints = false
+        return b
     }()
 
-    // Available Time
+    private lazy var headerChevron: UIImageView = {
+        let iv = UIImageView(image: UIImage(systemName: "chevron.right"))
+        iv.translatesAutoresizingMaskIntoConstraints = false
+        iv.tintColor = .secondaryLabel
+        iv.contentMode = .scaleAspectFit
+        return iv
+    }()
+
+    // Available times — created now but NOT added to the mainStack until date is chosen
     private let availableTitle: UILabel = {
         let l = ScheduleSessionViewController.sectionTitle("Available Time")
-        l.isHidden = true
+        l.isHidden = false // we'll manage visibility by presence in stack
+        l.alpha = 0.0
         return l
+    }()
+    private let timeSlotsScroll: UIScrollView = {
+        let sv = UIScrollView()
+        sv.showsHorizontalScrollIndicator = false
+        sv.translatesAutoresizingMaskIntoConstraints = false
+        sv.alpha = 0.0
+        return sv
     }()
     private let timeSlotsStack: UIStackView = {
         let s = UIStackView()
         s.axis = .horizontal
-        s.alignment = .leading
+        s.alignment = .center
         s.spacing = 12
         s.distribution = .fillProportionally
-        s.isHidden = true
+        s.translatesAutoresizingMaskIntoConstraints = false
         return s
     }()
 
-    // Upload
+    // Upload area
     private let attachTitle = ScheduleSessionViewController.sectionTitle("Attach Materials (Optional)")
     private let uploadButton: UIButton = {
         var c = UIButton.Configuration.bordered()
@@ -107,7 +141,7 @@ final class ScheduleSessionViewController: UIViewController {
         return l
     }()
 
-    // Bottom button
+    // Bottom book button
     private let bookButton: UIButton = {
         var c = UIButton.Configuration.filled()
         c.title = "Book Session"
@@ -122,24 +156,37 @@ final class ScheduleSessionViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .systemGroupedBackground
-        navigationItem.title = ""
-        navigationItem.backButtonDisplayMode = .minimal
 
-        view.tintColor = accentGray // subtle accent tone
+        navigationItem.title = ""
+        if #available(iOS 14.0, *) { navigationItem.backButtonDisplayMode = .minimal }
+
+        view.tintColor = accentGray
         setupLayout()
         buildMentorshipChips()
         wireActions()
+
+        // start with no date chosen -> no timeSlots in the stack
+        updateDateHeaderTitle()
     }
+
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        // Hide the floating + button when entering Mentorship screens
-        (tabBarController as? CineMystTabBarController)?.setFloatingButtonVisible(false)
+
+        // Hide tabbar & floating button while inside scheduling flow
+        tabBarController?.tabBar.isHidden = true
+        if let cineTab = tabBarController as? CineMystTabBarController {
+            cineTab.setFloatingButtonVisible(false, animated: false)
+        }
     }
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
-        // Show the + button again when leaving Mentorship tab
-        (tabBarController as? CineMystTabBarController)?.setFloatingButtonVisible(true)
+
+        // restore
+        tabBarController?.tabBar.isHidden = false
+        if let cineTab = tabBarController as? CineMystTabBarController {
+            cineTab.setFloatingButtonVisible(true, animated: false)
+        }
     }
 
     // MARK: - Mentorship chips
@@ -187,15 +234,10 @@ final class ScheduleSessionViewController: UIViewController {
     private func areaTag(_ a: MentorshipArea) -> Int { a == .acting ? 1 : (a == .dubbing ? 2 : 3) }
     private func areaFromTag(_ t: Int) -> MentorshipArea? { [1:.acting,2:.dubbing,3:.portfolio][t] }
 
-    // MARK: - Actions
+    // MARK: - Actions wiring
     private func wireActions() {
-        datePicker.addTarget(self, action: #selector(dateChanged), for: .valueChanged)
         uploadButton.addTarget(self, action: #selector(didTapUpload), for: .touchUpInside)
         bookButton.addTarget(self, action: #selector(didTapFinalBook), for: .touchUpInside)
-    }
-
-    @objc private func dateChanged() {
-        showTimeSlots(for: datePicker.date)
     }
 
     @objc private func didTapUpload() {
@@ -206,30 +248,125 @@ final class ScheduleSessionViewController: UIViewController {
         present(picker, animated: true)
     }
 
-    // ✅ Updated: Navigate to Payment Screen
     @objc private func didTapFinalBook() {
         guard let selectedArea else {
             return alert("Choose mentorship area", "Please select a mentorship area to continue.")
+        }
+        guard let chosenDate = selectedDate else {
+            return alert("Choose a date", "Please select a date to view and choose available times.")
         }
         guard let selectedTimeButton else {
             return alert("Pick a time", "Please choose an available time slot.")
         }
 
-        let vc = PaymentViewController(
-            area: selectedArea.rawValue,
-            date: datePicker.date,
-            time: selectedTimeButton.currentTitle ?? ""
-        )
-
+        let vc = PaymentViewController(area: selectedArea.rawValue, date: chosenDate, time: selectedTimeButton.currentTitle ?? "")
         navigationController?.pushViewController(vc, animated: true)
     }
 
-    // MARK: - Time Slots
+    // MARK: - Present date picker sheet
+    @objc private func presentDatePickerSheet() {
+        // Build container VC
+        let pickerVC = UIViewController()
+        pickerVC.view.backgroundColor = .systemBackground
+        pickerVC.modalPresentationStyle = .pageSheet
+
+        // DatePicker
+        let picker = UIDatePicker()
+        picker.datePickerMode = .date
+        if #available(iOS 13.4, *) { picker.preferredDatePickerStyle = .wheels } // change to .inline if you prefer
+        picker.minimumDate = Date()
+        // if user already chose a date, show it; otherwise default to today
+        picker.date = selectedDate ?? Date()
+        picker.translatesAutoresizingMaskIntoConstraints = false
+
+        // Toolbar with Cancel / Done
+        let toolbar = UIToolbar()
+        toolbar.translatesAutoresizingMaskIntoConstraints = false
+        let cancel = UIBarButtonItem(title: "Cancel", style: .plain, target: nil, action: nil)
+        let flexible = UIBarButtonItem(barButtonSystemItem: .flexibleSpace, target: nil, action: nil)
+        let done = UIBarButtonItem(title: "Done", style: .done, target: nil, action: nil)
+
+        cancel.target = self
+        cancel.action = #selector(didCancelDatePicker(_:))
+        done.target = self
+        done.action = #selector(didFinishDatePicker(_:))
+
+        toolbar.setItems([cancel, flexible, done], animated: false)
+
+        // Attach subviews
+        pickerVC.view.addSubview(toolbar)
+        pickerVC.view.addSubview(picker)
+
+        NSLayoutConstraint.activate([
+            toolbar.topAnchor.constraint(equalTo: pickerVC.view.safeAreaLayoutGuide.topAnchor),
+            toolbar.leadingAnchor.constraint(equalTo: pickerVC.view.leadingAnchor),
+            toolbar.trailingAnchor.constraint(equalTo: pickerVC.view.trailingAnchor),
+
+            picker.topAnchor.constraint(equalTo: toolbar.bottomAnchor, constant: 8),
+            picker.leadingAnchor.constraint(equalTo: pickerVC.view.leadingAnchor),
+            picker.trailingAnchor.constraint(equalTo: pickerVC.view.trailingAnchor),
+            picker.bottomAnchor.constraint(equalTo: pickerVC.view.safeAreaLayoutGuide.bottomAnchor)
+        ])
+
+        // Keep a reference to the picker so Done/Cancel handlers can access it easily.
+        pickerVC.view.tag = 999 // marker
+        objc_setAssociatedObject(pickerVC, &AssociatedKeys.pickerKey, picker, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+
+        // present as sheet (iOS 15+ deterministic detents)
+        if let sheet = pickerVC.sheetPresentationController {
+            sheet.detents = [.medium(), .large()]
+            sheet.preferredCornerRadius = 16
+            sheet.prefersGrabberVisible = true
+        }
+
+        present(pickerVC, animated: true, completion: nil)
+    }
+
+    // Cancel tapped: just dismiss
+    @objc private func didCancelDatePicker(_ sender: Any) {
+        dismissPresentedDatePicker()
+    }
+
+    // Done tapped: grab the picker from the presented VC and update state
+    @objc private func didFinishDatePicker(_ sender: Any) {
+        guard let presented = presentedViewController,
+              let picker = objc_getAssociatedObject(presented, &AssociatedKeys.pickerKey) as? UIDatePicker else {
+            dismissPresentedDatePicker()
+            return
+        }
+        // user explicitly picked a date — record it and reveal time slots by inserting views
+        selectedDate = picker.date
+        updateDateHeaderTitle()
+        showTimeSlots(for: picker.date)
+        addTimeSlotsSectionIfNeeded(animated: true)
+        dismissPresentedDatePicker()
+    }
+
+    private func dismissPresentedDatePicker() {
+        presentedViewController?.dismiss(animated: true, completion: nil)
+    }
+
+    // MARK: - Date header title update
+    private func updateDateHeaderTitle() {
+        if let chosen = selectedDate {
+            // show a readable month/year (matching earlier design)
+            let fmt = DateFormatter()
+            fmt.dateFormat = "LLLL yyyy"
+            let monthTitle = fmt.string(from: chosen)
+            dateHeaderButton.setTitle("\(monthTitle)  ›", for: .normal)
+        } else {
+            // when not chosen yet, invite the user
+            dateHeaderButton.setTitle("Select a date  ›", for: .normal)
+        }
+    }
+
+    // MARK: - Time slots
     private func showTimeSlots(for date: Date) {
-        let slots = generatedSlots(for: date)
+        // clear previous slots
         timeSlotsStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         selectedTimeButton = nil
 
+        let slots = generatedSlots(for: date)
         for s in slots {
             let b = UIButton(type: .system)
             b.setTitle(s, for: .normal)
@@ -242,9 +379,6 @@ final class ScheduleSessionViewController: UIViewController {
             b.addTarget(self, action: #selector(selectTime(_:)), for: .touchUpInside)
             timeSlotsStack.addArrangedSubview(b)
         }
-
-        availableTitle.isHidden = slots.isEmpty
-        timeSlotsStack.isHidden = slots.isEmpty
     }
 
     @objc private func selectTime(_ sender: UIButton) {
@@ -261,9 +395,60 @@ final class ScheduleSessionViewController: UIViewController {
 
     private func generatedSlots(for date: Date) -> [String] {
         let weekday = Calendar.current.component(.weekday, from: date)
-        return (weekday == 1 || weekday == 7)
-            ? ["10:00 am", "1:00 pm", "3:00 pm"]
-            : ["9:00 am", "11:00 am"]
+        return (weekday == 1 || weekday == 7) ? ["10:00 am", "1:00 pm", "3:00 pm"] : ["9:00 am", "11:00 am"]
+    }
+
+    // Insert the availableTitle + timeSlotsScroll into the main stack right under headerRow.
+    // If already present, do nothing. Animate insertion for a smooth effect.
+    private func addTimeSlotsSectionIfNeeded(animated: Bool) {
+        // if availableTitle is already present in stack, do nothing
+        if mainStack.arrangedSubviews.contains(where: { $0 === availableTitle }) {
+            // already added
+            // ensure the scroll has layout (in case it was added earlier)
+            return
+        }
+
+        // find index of headerRow to insert after it
+        guard let headerIndex = mainStack.arrangedSubviews.firstIndex(where: { $0 === headerRow }) else {
+            // fallback: append at end
+            mainStack.addArrangedSubview(availableTitle)
+            mainStack.addArrangedSubview(timeSlotsScroll)
+            return
+        }
+
+        // prepare timeSlotsScroll content if not already done
+        if timeSlotsScroll.superview == nil {
+            timeSlotsScroll.addSubview(timeSlotsStack)
+            NSLayoutConstraint.activate([
+                timeSlotsStack.topAnchor.constraint(equalTo: timeSlotsScroll.contentLayoutGuide.topAnchor),
+                timeSlotsStack.bottomAnchor.constraint(equalTo: timeSlotsScroll.contentLayoutGuide.bottomAnchor),
+                timeSlotsStack.leadingAnchor.constraint(equalTo: timeSlotsScroll.contentLayoutGuide.leadingAnchor, constant: 8),
+                timeSlotsStack.trailingAnchor.constraint(equalTo: timeSlotsScroll.contentLayoutGuide.trailingAnchor, constant: -8),
+                timeSlotsStack.heightAnchor.constraint(equalTo: timeSlotsScroll.frameLayoutGuide.heightAnchor)
+            ])
+        }
+
+        // insert views after headerRow
+        let insertIndex = headerIndex + 1
+        mainStack.insertArrangedSubview(availableTitle, at: insertIndex)
+        mainStack.insertArrangedSubview(timeSlotsScroll, at: insertIndex + 1)
+
+        // set initial alpha to 0 and then animate to 1
+        availableTitle.alpha = 0.0
+        timeSlotsScroll.alpha = 0.0
+        timeSlotsScroll.isHidden = false
+
+        if animated {
+            UIView.animate(withDuration: 0.28) {
+                self.availableTitle.alpha = 1.0
+                self.timeSlotsScroll.alpha = 1.0
+                self.view.layoutIfNeeded()
+            }
+        } else {
+            availableTitle.alpha = 1.0
+            timeSlotsScroll.alpha = 1.0
+            view.layoutIfNeeded()
+        }
     }
 
     // MARK: - Layout
@@ -289,7 +474,7 @@ final class ScheduleSessionViewController: UIViewController {
             scrollView.bottomAnchor.constraint(equalTo: bookButton.topAnchor, constant: -12)
         ])
 
-        // Content
+        // Content view
         scrollView.addSubview(contentView)
         contentView.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
@@ -314,18 +499,47 @@ final class ScheduleSessionViewController: UIViewController {
             infoBullets.bottomAnchor.constraint(equalTo: infoBox.bottomAnchor, constant: -12)
         ])
 
-        // Main stack
-        let main = UIStackView(arrangedSubviews: [
+        // Build headerRow (store as property so we can insert after it later)
+        headerRow = UIView()
+        headerRow.translatesAutoresizingMaskIntoConstraints = false
+        headerRow.addSubview(dateHeaderButton)
+        headerRow.addSubview(headerChevron)
+        NSLayoutConstraint.activate([
+            dateHeaderButton.topAnchor.constraint(equalTo: headerRow.topAnchor),
+            dateHeaderButton.bottomAnchor.constraint(equalTo: headerRow.bottomAnchor),
+            dateHeaderButton.leadingAnchor.constraint(equalTo: headerRow.leadingAnchor),
+            dateHeaderButton.trailingAnchor.constraint(equalTo: headerChevron.leadingAnchor, constant: -8),
+
+            headerChevron.centerYAnchor.constraint(equalTo: headerRow.centerYAnchor),
+            headerChevron.trailingAnchor.constraint(equalTo: headerRow.trailingAnchor, constant: -4),
+            headerChevron.widthAnchor.constraint(equalToConstant: 14)
+        ])
+
+        // Add a tap recognizer to headerRow as a fallback
+        let headerTap = UITapGestureRecognizer(target: self, action: #selector(presentDatePickerSheet))
+        headerRow.addGestureRecognizer(headerTap)
+
+        // Time slots scroll content (we set constraints now but don't add the scroll to the stack yet)
+        timeSlotsScroll.addSubview(timeSlotsStack)
+        NSLayoutConstraint.activate([
+            timeSlotsStack.topAnchor.constraint(equalTo: timeSlotsScroll.contentLayoutGuide.topAnchor),
+            timeSlotsStack.bottomAnchor.constraint(equalTo: timeSlotsScroll.contentLayoutGuide.bottomAnchor),
+            timeSlotsStack.leadingAnchor.constraint(equalTo: timeSlotsScroll.contentLayoutGuide.leadingAnchor, constant: 8),
+            timeSlotsStack.trailingAnchor.constraint(equalTo: timeSlotsScroll.contentLayoutGuide.trailingAnchor, constant: -8),
+            timeSlotsStack.heightAnchor.constraint(equalTo: timeSlotsScroll.frameLayoutGuide.heightAnchor)
+        ])
+
+        // Main content stack: NOTE we do NOT include availableTitle/timeSlotsScroll here initially
+        mainStack = UIStackView(arrangedSubviews: [
             titleLabel,
             UIView(height: 8),
             mentorshipTitle,
             mentorshipStack,
             UIView(height: 12),
             chooseDateTitle,
-            datePicker,
+            headerRow,
             UIView(height: 8),
-            availableTitle,
-            timeSlotsStack,
+            // availableTitle and timeSlotsScroll WILL be inserted later after headerRow
             UIView(height: 16),
             attachTitle,
             uploadButton,
@@ -333,16 +547,16 @@ final class ScheduleSessionViewController: UIViewController {
             UIView(height: 12),
             infoBox
         ])
-        main.axis = .vertical
-        main.spacing = 10
+        mainStack.axis = .vertical
+        mainStack.spacing = 10
 
-        contentView.addSubview(main)
-        main.translatesAutoresizingMaskIntoConstraints = false
+        contentView.addSubview(mainStack)
+        mainStack.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
-            main.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 16),
-            main.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
-            main.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
-            main.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -24),
+            mainStack.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 16),
+            mainStack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
+            mainStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
+            mainStack.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -24),
             infoBox.heightAnchor.constraint(greaterThanOrEqualToConstant: 96)
         ])
     }
@@ -361,6 +575,11 @@ final class ScheduleSessionViewController: UIViewController {
         a.addAction(UIAlertAction(title: "OK", style: .default))
         present(a, animated: true)
     }
+}
+
+// MARK: - Associated object key for attaching picker to the presented VC
+private struct AssociatedKeys {
+    static var pickerKey = "schedule_picker_key"
 }
 
 // Spacer helper
