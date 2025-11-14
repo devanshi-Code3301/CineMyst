@@ -370,8 +370,11 @@ final class MentorshipHomeViewController: UIViewController {
     }
 
     @objc private func didTapSeeAll() {
-        print("See all tapped")
+        let vc = AllMentorsViewController()
+        vc.hidesBottomBarWhenPushed = true
+        navigationController?.pushViewController(vc, animated: true)
     }
+
 }
 
 // MARK: - Collection DataSource & Delegate

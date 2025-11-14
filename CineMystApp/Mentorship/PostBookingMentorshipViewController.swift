@@ -215,7 +215,12 @@ final class PostBookingMentorshipViewController: UIViewController {
 
     @objc private func segmentChanged(_ s: UISegmentedControl) { /* no-op for now */ }
     @objc private func didTapSessionsSeeAll() { print("Sessions See all tapped") }
-    @objc private func didTapMentorsSeeAll() { print("Mentors See all tapped") }
+    @objc private func didTapMentorsSeeAll() {
+        let vc = AllMentorsViewController()
+        vc.hidesBottomBarWhenPushed = true
+        navigationController?.pushViewController(vc, animated: true)
+    }
+
 }
 
 extension PostBookingMentorshipViewController: UITableViewDataSource, UITableViewDelegate {

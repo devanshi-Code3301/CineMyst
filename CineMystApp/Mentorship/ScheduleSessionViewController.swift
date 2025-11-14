@@ -4,6 +4,8 @@
 //
 //  Updated: compact "Choose Date" header + modal date sheet.
 //  Time slots are added to the stack only after the user picks a date — no phantom space.
+//  Fixed: tightened picker sheet layout so the toolbar sits directly under the grabber
+//         (removed large gap caused by pinning toolbar to safeArea on the sheet).
 //
 
 import UIKit
@@ -297,15 +299,17 @@ final class ScheduleSessionViewController: UIViewController {
         pickerVC.view.addSubview(toolbar)
         pickerVC.view.addSubview(picker)
 
+        // ❗️ FIXED CONSTRAINTS: pin toolbar and picker to view.top / view.bottom so they sit
+        // directly under the sheet grabber (avoids large gap caused by safeArea on the sheet).
         NSLayoutConstraint.activate([
-            toolbar.topAnchor.constraint(equalTo: pickerVC.view.safeAreaLayoutGuide.topAnchor),
+            toolbar.topAnchor.constraint(equalTo: pickerVC.view.topAnchor),
             toolbar.leadingAnchor.constraint(equalTo: pickerVC.view.leadingAnchor),
             toolbar.trailingAnchor.constraint(equalTo: pickerVC.view.trailingAnchor),
 
-            picker.topAnchor.constraint(equalTo: toolbar.bottomAnchor, constant: 8),
+            picker.topAnchor.constraint(equalTo: toolbar.bottomAnchor),
             picker.leadingAnchor.constraint(equalTo: pickerVC.view.leadingAnchor),
             picker.trailingAnchor.constraint(equalTo: pickerVC.view.trailingAnchor),
-            picker.bottomAnchor.constraint(equalTo: pickerVC.view.safeAreaLayoutGuide.bottomAnchor)
+            picker.bottomAnchor.constraint(equalTo: pickerVC.view.bottomAnchor)
         ])
 
         // Keep a reference to the picker so Done/Cancel handlers can access it easily.
