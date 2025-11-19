@@ -9,14 +9,19 @@ import UIKit
 
 @main
 class AppDelegate: UIResponder, UIApplicationDelegate {
-
-
-
+    
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // Override point for customization after application launch.
-        return true
-    }
-
+            
+            // Debug: Print the configuration values
+            print("=== SUPABASE CONFIG DEBUG ===")
+            print("SUPABASE_URL from Info.plist: \(Bundle.main.object(forInfoDictionaryKey: "SUPABASE_URL") ?? "NOT FOUND")")
+            print("SUPABASE_KEY from Info.plist: \(Bundle.main.object(forInfoDictionaryKey: "SUPABASE_KEY") ?? "NOT FOUND")")
+            print("============================")
+            
+            return true
+        }
+    
+    
     // MARK: UISceneSession Lifecycle
 
     func application(_ application: UIApplication, configurationForConnecting connectingSceneSession: UISceneSession, options: UIScene.ConnectionOptions) -> UISceneConfiguration {

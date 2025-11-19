@@ -8,7 +8,7 @@ import UIKit
 final class MentorSessionDetailViewController: UIViewController {
 
     // Either one may be set by caller. We treat Call by converting to Session for reschedule flow.
-    var session: Session?
+    var session: SessionM?
     var call: Call?
 
     // Theme color
@@ -198,8 +198,8 @@ final class MentorSessionDetailViewController: UIViewController {
     }
 
     // Helper: convert current call into a Session object for reschedule flow
-    private func sessionFromCall(_ c: Call) -> Session {
-        return Session(
+    private func sessionFromCall(_ c: Call) -> SessionM {
+        return SessionM(
             id: c.id,
             mentorId: "",                       // if you have mentorId on Call, use it
             mentorName: c.mentorName,
@@ -301,7 +301,7 @@ final class MentorSessionDetailViewController: UIViewController {
             let rescheduleVC = RescheduleViewController(session: s)
             rescheduleVC.onReschedule = { [weak self] newDate, slot in
                 guard let self = self else { return }
-                let updated = Session(
+                let updated = SessionM(
                     id: s.id,
                     mentorId: s.mentorId,
                     mentorName: s.mentorName,
@@ -323,7 +323,7 @@ final class MentorSessionDetailViewController: UIViewController {
             let rescheduleVC = RescheduleViewController(session: s)
             rescheduleVC.onReschedule = { [weak self] newDate, slot in
                 guard let self = self else { return }
-                let updated = Session(
+                let updated = SessionM(
                     id: s.id,
                     mentorId: s.mentorId,
                     mentorName: s.mentorName,

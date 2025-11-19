@@ -171,6 +171,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = CineMystApp/Info.plist;
+				INFOPLIST_KEY_NSCameraUsageDescription = "CineMyst needs access to your camera to capture stories and flicks.\nCineMyst needs access to your camera to capture stories and flicks.\nCineMyst needs to access your camera";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UIMainStoryboardFile = Main;
@@ -198,6 +199,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = CineMystApp/Info.plist;
+				INFOPLIST_KEY_NSCameraUsageDescription = "CineMyst needs access to your camera to capture stories and flicks.\nCineMyst needs access to your camera to capture stories and flicks.\nCineMyst needs to access your camera";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UIMainStoryboardFile = Main;
@@ -218,6 +220,8 @@
 		};
 		5B9C891B2EC2D95400A0F1F1 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReferenceAnchor = 5B9C89072EC2D95200A0F1F1 /* CineMystApp */;
+			baseConfigurationReferenceRelativePath = Secrets.xcconfig;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
@@ -281,6 +285,8 @@
 		};
 		5B9C891C2EC2D95400A0F1F1 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReferenceAnchor = 5B9C89072EC2D95200A0F1F1 /* CineMystApp */;
+			baseConfigurationReferenceRelativePath = Secrets.xcconfig;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;

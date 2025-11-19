@@ -1,4 +1,4 @@
-// Session.swift
+// SessionM.swift
 // Lightweight session model used by SessionStore and view controllers
 
 import Foundation
