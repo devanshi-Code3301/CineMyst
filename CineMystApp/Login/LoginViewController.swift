@@ -113,8 +113,10 @@ class LoginViewController: UIViewController {
     }
     
     @IBAction func signUpButtonTapped(_ sender: UIButton) {
-        let signUpVC = storyboard?.instantiateViewController(withIdentifier: "SignUpViewController") as! SignUpViewController
-               navigationController?.pushViewController(signUpVC, animated: true)
+        
+        
+        let signUpVC = SignUpViewController(nibName: "SignUpViewController", bundle: nil)
+            navigationController?.pushViewController(signUpVC, animated: true)
     }
     
     
