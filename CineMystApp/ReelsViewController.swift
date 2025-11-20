@@ -163,9 +163,8 @@ final class ReelsViewController: UIViewController {
         return iv
     }()
 
-    // stored constraints
+    // stored constraint for caption bottom
     private var captionContainerBottomConstraint: NSLayoutConstraint!
-    private var actionStackBottomConstraint: NSLayoutConstraint!
 
     // MARK: - Lifecycle
 
@@ -180,16 +179,13 @@ final class ReelsViewController: UIViewController {
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-        // use tabBar height so captions + icons always sit above the system tab bar
+        // use tabBar height so captions always sit above the system tab bar
         let tabBarHeight = tabBarController?.tabBar.frame.height ?? 0
         captionContainerBottomConstraint.constant = -(tabBarHeight + 12)
 
-        // keep action stack anchored above the caption container (small gap)
-        // set this constant to - (captionHeight + gap) — we constrain bottom to captionContainer.top
-        actionStackBottomConstraint.constant = -20
-
         // update gradient frame
         captionGradient.frame = captionContainer.bounds
+        
     }
 
     // MARK: - Setup
@@ -201,10 +197,11 @@ final class ReelsViewController: UIViewController {
 
         // right actions
         view.addSubview(actionStack)
+        // order: from top -> bottom, but we'll anchor bottom to audio row so the lowest icon aligns to audio
         actionStack.addArrangedSubview(actionButton(systemName: "heart.fill", value: "253K"))
         actionStack.addArrangedSubview(actionButton(systemName: "message", value: "1.139"))
         actionStack.addArrangedSubview(actionButton(systemName: "paperplane", value: "29"))
-        actionStack.addArrangedSubview(actionButton(systemName: "bookmark", value: ""))
+        actionStack.addArrangedSubview(actionButton(systemName: "bookmark", value: "")) // lowest / saved
 
         // caption container contents
         view.addSubview(captionContainer)
@@ -239,10 +236,16 @@ final class ReelsViewController: UIViewController {
             playTriangleView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             playTriangleView.centerYAnchor.constraint(equalTo: view.centerYAnchor),
             playTriangleView.widthAnchor.constraint(equalToConstant: 96),
-            playTriangleView.heightAnchor.constraint(equalToConstant: 96),
+            playTriangleView.heightAnchor.constraint(equalToConstant: 96)
+        ])
 
-            // action stack - keep trailing to view.trailing
-            actionStack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -14)
+        // action stack - the key change:
+        // anchor the bottom of the action stack to the centerY of the audioTagButton.
+        // This makes the lowest action (bookmark) align with the audio title row.
+        // added a small positive offset (8) to nudge it slightly lower
+        NSLayoutConstraint.activate([
+            actionStack.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -12),
+            actionStack.bottomAnchor.constraint(equalTo: audioTagButton.centerYAnchor, constant: 8)
         ])
 
         // caption container width (left side) — stays out of actionStack area
@@ -294,13 +297,9 @@ final class ReelsViewController: UIViewController {
             musicThumb.bottomAnchor.constraint(equalTo: captionContainer.bottomAnchor, constant: -10),
         ])
 
-        // bottom & action stack bottom constraints
+        // bottom constraint for caption container (we update its constant in viewDidLayoutSubviews)
         captionContainerBottomConstraint = captionContainer.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -88)
         captionContainerBottomConstraint.isActive = true
-
-        // anchor actionStack bottom to captionContainer.top (so icons sit above the caption container)
-        actionStackBottomConstraint = actionStack.bottomAnchor.constraint(equalTo: captionContainer.topAnchor, constant: -20)
-        actionStackBottomConstraint.isActive = true
     }
 
     // MARK: - Helpers / sample data
