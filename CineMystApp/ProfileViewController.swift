@@ -131,14 +131,16 @@ final class ProfileViewController: UIViewController {
 
         // Buttons
         connectButton.setTitle("Connected", for: .normal)
-        connectButton.backgroundColor = UIColor.systemPurple
+        connectButton.backgroundColor = UIColor(named: "AccentColor")
+
         connectButton.setTitleColor(.white, for: .normal)
         connectButton.layer.cornerRadius = 10
         connectButton.titleLabel?.font = .systemFont(ofSize: 15, weight: .semibold)
 
         portfolioButton.setTitle("View Portfolio", for: .normal)
-        portfolioButton.backgroundColor = .white
-        portfolioButton.setTitleColor(.systemPurple, for: .normal)
+        portfolioButton.backgroundColor = UIColor(named: "AccentColor")
+
+        portfolioButton.setTitleColor(.white, for: .normal)
         portfolioButton.layer.cornerRadius = 10
         portfolioButton.layer.shadowOpacity = 0.2
         portfolioButton.layer.shadowRadius = 2
