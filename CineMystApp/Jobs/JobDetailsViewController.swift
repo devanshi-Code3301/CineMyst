@@ -209,9 +209,9 @@ Seeking a versatile actor for the lead role in an upcoming independent film. The
         
         let skillsRow = UIStackView(arrangedSubviews: [skill1, skill2])
         skillsRow.axis = .horizontal
-        skillsRow.spacing = 10
+        skillsRow.spacing = 8
         skillsRow.alignment = .leading          // prevents stretching vertically
-        skillsRow.distribution = .equalSpacing  // prevents full-width stretching
+        skillsRow.distribution = .fillEqually // prevents full-width stretching
         
         let expTitle = makeSmallSectionTitle("EXPERIENCE")
         
@@ -273,4 +273,3 @@ Seeking a versatile actor for the lead role in an upcoming independent film. The
             return container
         }
 }
-
