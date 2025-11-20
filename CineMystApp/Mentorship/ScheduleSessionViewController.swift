@@ -289,17 +289,27 @@ final class ScheduleSessionViewController: UIViewController {
         pickerVC.view.addSubview(picker)
 
         // Layout:
-        // Pin toolbar directly to the view's top with a very small inset so it sits visually under the grabber.
-        // Pin picker under the toolbar to fill the sheet.
+        // Pin toolbar directly to the view's top (so it sits visually under the grabber).
+        // Fix picker height and pin it below toolbar to eliminate extra vertical padding.
+        let toolbarHeight: CGFloat = 44
+        // standard wheel UIDatePicker height is typically ~216 on iPhone for .wheels style
+        // keep as constant so sheet matches it exactly and no extra bottom padding remains
+        let pickerHeight: CGFloat = 216
+
         NSLayoutConstraint.activate([
-            // small top constant ensures toolbar sits snug under the grabber on most devices/detents
-            toolbar.topAnchor.constraint(equalTo: pickerVC.view.topAnchor, constant: 6),
+            // toolbar pinned to absolute top of the sheet's content view
+            toolbar.topAnchor.constraint(equalTo: pickerVC.view.topAnchor),
             toolbar.leadingAnchor.constraint(equalTo: pickerVC.view.leadingAnchor),
             toolbar.trailingAnchor.constraint(equalTo: pickerVC.view.trailingAnchor),
+            toolbar.heightAnchor.constraint(equalToConstant: toolbarHeight),
 
+            // picker pinned immediately under toolbar and set to fixed height
             picker.topAnchor.constraint(equalTo: toolbar.bottomAnchor),
             picker.leadingAnchor.constraint(equalTo: pickerVC.view.leadingAnchor),
             picker.trailingAnchor.constraint(equalTo: pickerVC.view.trailingAnchor),
+            picker.heightAnchor.constraint(equalToConstant: pickerHeight),
+
+            // ensure the content view's bottom is aligned to the picker's bottom so sheet height is exact
             picker.bottomAnchor.constraint(equalTo: pickerVC.view.bottomAnchor)
         ])
 
@@ -308,9 +318,26 @@ final class ScheduleSessionViewController: UIViewController {
 
         // present as sheet (iOS 15+ deterministic detents)
         if let sheet = pickerVC.sheetPresentationController {
-            sheet.detents = [.medium(), .large()]
-            sheet.preferredCornerRadius = 16
             sheet.prefersGrabberVisible = true
+            sheet.preferredCornerRadius = 16
+            sheet.prefersScrollingExpandsWhenScrolledToEdge = false
+            sheet.prefersEdgeAttachedInCompactHeight = false
+
+            // Prefer an exact detent on iOS 16+ using custom detent when available
+            if #available(iOS 16.0, *) {
+                let targetHeight = toolbarHeight + pickerHeight
+                let customDetent = UISheetPresentationController.Detent.custom(identifier: .init("picker-detent")) { _ in
+                    return targetHeight
+                }
+                sheet.detents = [customDetent]
+            } else {
+                // fallback for iOS 15: use medium/large but set preferredContentSize so the system attempts to size tightly
+                pickerVC.preferredContentSize = CGSize(width: view.bounds.width, height: toolbarHeight + pickerHeight)
+                sheet.detents = [.medium(), .large()]
+            }
+        } else {
+            // fallback: set preferredContentSize
+            pickerVC.preferredContentSize = CGSize(width: view.bounds.width, height: toolbarHeight + pickerHeight)
         }
 
         present(pickerVC, animated: true, completion: nil)
