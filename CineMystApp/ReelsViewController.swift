@@ -306,20 +306,22 @@ final class ReelsViewController: UIViewController {
     // MARK: - Helpers / sample data
 
     private func loadPlaceholderImage() {
-        let path = "/mnt/data/6e1783df-eca5-4630-9623-dbe39e50f04e.png"
-        if let img = UIImage(contentsOfFile: path) {
+        // Always load the "flick" asset from Assets.xcassets
+        if let img = UIImage(named: "flick") {
             backgroundImageView.image = img
             musicThumb.image = img
             avatarImageView.image = img
         } else {
-            backgroundImageView.image = UIImage(named: "flick")
-            musicThumb.image = UIImage(named: "flick")
-            avatarImageView.image = UIImage(named: "flick")
+            // fallback (should never happen if asset exists)
+            backgroundImageView.backgroundColor = .darkGray
+            musicThumb.backgroundColor = .darkGray
+            avatarImageView.backgroundColor = .darkGray
         }
     }
 
     private func loadPortraitExamples() {
         smallAvatarsStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        let flickImage = UIImage(named: "flick")
         for _ in 0..<3 {
             let iv = UIImageView()
             iv.translatesAutoresizingMaskIntoConstraints = false
@@ -330,7 +332,7 @@ final class ReelsViewController: UIViewController {
             iv.layer.borderColor = UIColor.white.cgColor
             iv.layer.borderWidth = 1.0
             iv.backgroundColor = .gray
-            if let img = backgroundImageView.image { iv.image = img }
+            iv.image = flickImage
             smallAvatarsStack.addArrangedSubview(iv)
         }
     }

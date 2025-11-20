@@ -1,4 +1,6 @@
+//
 //  MessagesViewController.swift
+//
 
 import UIKit
 
@@ -127,7 +129,6 @@ final class ConversationCell: UITableViewCell {
         if let img = model.avatar {
             avatarImageView.image = img
         } else {
-            // fallback placeholder: initials circle
             avatarImageView.image = nil
         }
     }
@@ -188,7 +189,6 @@ final class MessagesViewController: UIViewController {
 
     // Placeholder avatar: uses uploaded image path (replace with asset if you prefer)
     private let placeholderAvatar = UIImage(named: "Image")
-
 
     // Dummy data
     private var conversations: [Conversation] = []
@@ -277,6 +277,12 @@ final class MessagesViewController: UIViewController {
         tableView.delegate = self
     }
 
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        // ensure default navigation state: hide the standard back button if this VC is root
+        navigationItem.hidesBackButton = true
+    }
+
     // MARK: Setup
 
     private func setupDummyData() {
@@ -298,8 +304,12 @@ final class MessagesViewController: UIViewController {
     }
 
     private func configureSubviews() {
-        // Top "nav" area
-        view.addSubview(navLeftButton)
+        // Top "nav" area — only add the left back button when needed
+        let shouldShowBack = shouldShowBackButton()
+        if shouldShowBack {
+            view.addSubview(navLeftButton)
+        }
+
         view.addSubview(titleLabel)
         view.addSubview(navRightStack)
 
@@ -315,23 +325,47 @@ final class MessagesViewController: UIViewController {
 
     private func configureConstraints() {
         let safe = view.safeAreaLayoutGuide
-        NSLayoutConstraint.activate([
-            // nav left button
-            navLeftButton.leadingAnchor.constraint(equalTo: safe.leadingAnchor, constant: 12),
-            navLeftButton.topAnchor.constraint(equalTo: safe.topAnchor, constant: 8),
-            navLeftButton.widthAnchor.constraint(equalToConstant: 30),
-            navLeftButton.heightAnchor.constraint(equalToConstant: 30),
 
-            // nav right
-            navRightStack.trailingAnchor.constraint(equalTo: safe.trailingAnchor, constant: -12),
-            navRightStack.centerYAnchor.constraint(equalTo: navLeftButton.centerYAnchor),
+        // We'll build constraints conditionally depending on whether we added navLeftButton
+        let shouldShowBack = shouldShowBackButton()
 
-            // title centered
-            titleLabel.centerXAnchor.constraint(equalTo: safe.centerXAnchor),
-            titleLabel.centerYAnchor.constraint(equalTo: navLeftButton.centerYAnchor),
+        var constraints: [NSLayoutConstraint] = []
 
+        if shouldShowBack {
+            // nav left button constraints
+            constraints += [
+                navLeftButton.leadingAnchor.constraint(equalTo: safe.leadingAnchor, constant: 12),
+                navLeftButton.topAnchor.constraint(equalTo: safe.topAnchor, constant: 8),
+                navLeftButton.widthAnchor.constraint(equalToConstant: 30),
+                navLeftButton.heightAnchor.constraint(equalToConstant: 30)
+            ]
+
+            // nav right stack vertically aligned with left button
+            constraints += [
+                navRightStack.trailingAnchor.constraint(equalTo: safe.trailingAnchor, constant: -12),
+                navRightStack.centerYAnchor.constraint(equalTo: navLeftButton.centerYAnchor)
+            ]
+
+            // title centered using the left button's centerY
+            constraints += [
+                titleLabel.centerXAnchor.constraint(equalTo: safe.centerXAnchor),
+                titleLabel.centerYAnchor.constraint(equalTo: navLeftButton.centerYAnchor)
+            ]
+        } else {
+            // No left nav button — center title at top safe area
+            constraints += [
+                titleLabel.centerXAnchor.constraint(equalTo: safe.centerXAnchor),
+                titleLabel.topAnchor.constraint(equalTo: safe.topAnchor, constant: 8),
+
+                navRightStack.trailingAnchor.constraint(equalTo: safe.trailingAnchor, constant: -12),
+                navRightStack.centerYAnchor.constraint(equalTo: titleLabel.centerYAnchor)
+            ]
+        }
+
+        // Common constraints for the rest of the UI
+        constraints += [
             // Search bar
-            searchField.topAnchor.constraint(equalTo: navLeftButton.bottomAnchor, constant: 8),
+            searchField.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 8),
             searchField.leadingAnchor.constraint(equalTo: safe.leadingAnchor, constant: 12),
             searchField.trailingAnchor.constraint(equalTo: safe.trailingAnchor, constant: -12),
             searchField.heightAnchor.constraint(equalToConstant: 44),
@@ -346,19 +380,31 @@ final class MessagesViewController: UIViewController {
             tableView.topAnchor.constraint(equalTo: storiesCollection.bottomAnchor, constant: 4),
             tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            tableView.bottomAnchor.constraint(equalTo: safe.bottomAnchor), // leaves tab bar visible if inside tab controller
-        ])
+            tableView.bottomAnchor.constraint(equalTo: safe.bottomAnchor)
+        ]
+
+        NSLayoutConstraint.activate(constraints)
     }
 
     private func configureActions() {
-        navLeftButton.addTarget(self, action: #selector(didTapBack), for: .touchUpInside)
-        // example button actions inside navRightStack: subviews[0], subviews[1]
+        // Only wire the back action if the button was added
+        if shouldShowBackButton() {
+            navLeftButton.addTarget(self, action: #selector(didTapBack), for: .touchUpInside)
+        }
+
         if let more = navRightStack.arrangedSubviews.first as? UIButton {
             more.addTarget(self, action: #selector(didTapMore), for: .touchUpInside)
         }
         if navRightStack.arrangedSubviews.count > 1, let compose = navRightStack.arrangedSubviews[1] as? UIButton {
             compose.addTarget(self, action: #selector(didTapCompose), for: .touchUpInside)
         }
+    }
+
+    // determine if we should show the left/back button:
+    // show it only when this VC is not the root of a navigation controller
+    private func shouldShowBackButton() -> Bool {
+        guard let nav = navigationController else { return false }
+        return nav.viewControllers.first != self
     }
 
     // MARK: Actions
@@ -368,14 +414,12 @@ final class MessagesViewController: UIViewController {
     }
 
     @objc private func didTapMore() {
-        // placeholder action
         let a = UIAlertController(title: "More", message: nil, preferredStyle: .actionSheet)
         a.addAction(.init(title: "Cancel", style: .cancel))
         present(a, animated: true)
     }
 
     @objc private func didTapCompose() {
-        // placeholder: open compose
         let a = UIAlertController(title: "Compose", message: nil, preferredStyle: .alert)
         a.addAction(.init(title: "OK", style: .default))
         present(a, animated: true)
@@ -399,7 +443,6 @@ extension MessagesViewController: UICollectionViewDataSource, UICollectionViewDe
     }
 
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
-        // open story / do something
         collectionView.deselectItem(at: indexPath, animated: true)
     }
 }
@@ -421,7 +464,6 @@ extension MessagesViewController: UITableViewDataSource, UITableViewDelegate {
     }
 
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        // push chat VC if you have one
         tableView.deselectRow(at: indexPath, animated: true)
         let conv = conversations[indexPath.row]
         let detail = UIViewController()
