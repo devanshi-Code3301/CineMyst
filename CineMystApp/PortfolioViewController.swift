@@ -61,6 +61,12 @@ final class PortfolioViewController: UIViewController {
         navigationController?.navigationBar.isHidden = true
     }
 
+    // ⭐ FIX HERE — Unhide navigation bar when leaving Portfolio
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        navigationController?.navigationBar.isHidden = false
+    }
+
     override var preferredStatusBarStyle: UIStatusBarStyle {
         return .lightContent
     }
@@ -68,7 +74,6 @@ final class PortfolioViewController: UIViewController {
     // MARK: - UI Setup
     private func setupView() {
         view.backgroundColor = .black
-        navigationController?.navigationBar.isHidden = true
 
         // Add Back Button
         view.addSubview(backButton)
@@ -112,7 +117,7 @@ final class PortfolioViewController: UIViewController {
         collectionView.register(GalleryCell.self, forCellWithReuseIdentifier: GalleryCell.reuseId)
 
         view.addSubview(collectionView)
-        view.bringSubviewToFront(backButton)  // ensures back button stays on top
+        view.bringSubviewToFront(backButton)  // keep button on top
     }
 }
 
