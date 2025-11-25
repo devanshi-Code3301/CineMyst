@@ -93,7 +93,7 @@ final class BookViewController: UIViewController {
 
     private lazy var statsRow: UIStackView = {
         let s1 = statBlock(title: "Year Exp", value: "10+")
-        let s2 = statBlock(title: "Mentor", value: "5")
+        let s2 = statBlock(title: "Mentor", value: "4 ★")
         let s3 = statBlock(title: "Sessions", value: "50+")
         let h = UIStackView(arrangedSubviews: [s1, s2, s3])
         h.axis = .horizontal

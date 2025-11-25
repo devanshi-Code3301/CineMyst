@@ -3,6 +3,12 @@
 //  CineMystApp
 //
 //  Updated: picker sheet toolbar aligned directly under grabber (no large gap).
+//           Mentorship area now allows multiple selection.
+//           Removed attach materials section and moved heading into navigation bar
+//           Align "Available Time" to match other section titles.
+//
+//  Screenshot for reference:
+//  /mnt/data/83855070-6969-4990-9a71-eac19924fdc5.png
 //
 
 import UIKit
@@ -23,7 +29,8 @@ final class ScheduleSessionViewController: UIViewController {
     private let accentGray = UIColor(white: 0.4, alpha: 1.0)
 
     // MARK: - State
-    private var selectedArea: MentorshipArea?
+    /// Allow multiple selection now
+    private var selectedAreas: Set<MentorshipArea> = []
     private var selectedTimeButton: UIButton?
     /// Date will be nil until user explicitly picks a date via the sheet
     private var selectedDate: Date?
@@ -34,13 +41,6 @@ final class ScheduleSessionViewController: UIViewController {
 
     private var mainStack: UIStackView!               // main content stack (we'll insert into this)
     private var headerRow: UIView!                    // header row (date header + chevron), used as insertion anchor
-
-    private let titleLabel: UILabel = {
-        let l = UILabel()
-        l.text = "Schedule Session"
-        l.font = .systemFont(ofSize: 28, weight: .bold)
-        return l
-    }()
 
     // Mentorship chips
     private let mentorshipTitle = ScheduleSessionViewController.sectionTitle("Mentorship Area")
@@ -97,26 +97,6 @@ final class ScheduleSessionViewController: UIViewController {
         return s
     }()
 
-    // Upload area
-    private let attachTitle = ScheduleSessionViewController.sectionTitle("Attach Materials (Optional)")
-    private let uploadButton: UIButton = {
-        var c = UIButton.Configuration.bordered()
-        c.title = "Upload Files"
-        c.image = UIImage(systemName: "arrow.up.doc")
-        c.imagePadding = 8
-        c.cornerStyle = .large
-        let b = UIButton(configuration: c)
-        b.contentEdgeInsets = .init(top: 10, left: 14, bottom: 10, right: 14)
-        return b
-    }()
-    private let uploadHint: UILabel = {
-        let l = UILabel()
-        l.text = "Self-tapes, headshots, or scripts for review"
-        l.font = .systemFont(ofSize: 12)
-        l.textColor = .secondaryLabel
-        return l
-    }()
-
     // Info box
     private let infoBox: UIView = {
         let v = UIView()
@@ -136,7 +116,10 @@ final class ScheduleSessionViewController: UIViewController {
         l.numberOfLines = 0
         l.font = .systemFont(ofSize: 13)
         l.textColor = .systemBlue
-        l.text = "• Google Meet link will be sent to your email\n• Cancellation allowed up to 24 hours before"
+        l.text = """
+• Google Meet link will be sent to your email
+• Cancellation allowed up to 24 hours before
+"""
         return l
     }()
 
@@ -156,7 +139,9 @@ final class ScheduleSessionViewController: UIViewController {
         super.viewDidLoad()
         view.backgroundColor = .systemGroupedBackground
 
-        navigationItem.title = ""
+        // Move heading into navigation bar so it lines up with the back arrow
+        navigationItem.title = "Schedule Session"
+        // Use compact title (single-line) so it stays aligned with the back button
         if #available(iOS 14.0, *) { navigationItem.backButtonDisplayMode = .minimal }
 
         view.tintColor = accentGray
@@ -173,7 +158,7 @@ final class ScheduleSessionViewController: UIViewController {
 
         // Hide tabbar & floating button while inside scheduling flow
         tabBarController?.tabBar.isHidden = true
-       
+
     }
 
     override func viewWillDisappear(_ animated: Bool) {
@@ -181,7 +166,7 @@ final class ScheduleSessionViewController: UIViewController {
 
         // restore
         tabBarController?.tabBar.isHidden = false
-      
+
     }
 
     // MARK: - Mentorship chips
@@ -190,6 +175,8 @@ final class ScheduleSessionViewController: UIViewController {
         for area in MentorshipArea.allCases {
             let btn = makeChipButton(title: area.rawValue)
             btn.tag = areaTag(area)
+            // reflect any previously selected areas (if restoring state)
+            if selectedAreas.contains(area) { setChip(btn, selected: true) }
             mentorshipStack.addArrangedSubview(btn)
         }
     }
@@ -209,9 +196,17 @@ final class ScheduleSessionViewController: UIViewController {
     }
 
     @objc private func chooseMentorship(_ sender: UIButton) {
-        mentorshipStack.arrangedSubviews.compactMap { $0 as? UIButton }.forEach { setChip($0, selected: false) }
-        setChip(sender, selected: true)
-        selectedArea = areaFromTag(sender.tag)
+        // Toggle selection for multi-select behavior
+        let isCurrentlySelected = sender.backgroundColor == plum.withAlphaComponent(0.10)
+        if isCurrentlySelected {
+            // deselect
+            setChip(sender, selected: false)
+            if let area = areaFromTag(sender.tag) { selectedAreas.remove(area) }
+        } else {
+            // select (do NOT clear other selections)
+            setChip(sender, selected: true)
+            if let area = areaFromTag(sender.tag) { selectedAreas.insert(area) }
+        }
     }
 
     private func setChip(_ b: UIButton, selected: Bool) {
@@ -231,21 +226,12 @@ final class ScheduleSessionViewController: UIViewController {
 
     // MARK: - Actions wiring
     private func wireActions() {
-        uploadButton.addTarget(self, action: #selector(didTapUpload), for: .touchUpInside)
         bookButton.addTarget(self, action: #selector(didTapFinalBook), for: .touchUpInside)
     }
 
-    @objc private func didTapUpload() {
-        var types: [UTType] = [.pdf, .image, .plainText]
-        if #available(iOS 14.0, *) { types.append(.data) }
-        let picker = UIDocumentPickerViewController(forOpeningContentTypes: types, asCopy: true)
-        picker.allowsMultipleSelection = true
-        present(picker, animated: true)
-    }
-
     @objc private func didTapFinalBook() {
-        guard let selectedArea else {
-            return alert("Choose mentorship area", "Please select a mentorship area to continue.")
+        guard !selectedAreas.isEmpty else {
+            return alert("Choose mentorship area", "Please select at least one mentorship area to continue.")
         }
         guard let chosenDate = selectedDate else {
             return alert("Choose a date", "Please select a date to view and choose available times.")
@@ -254,7 +240,11 @@ final class ScheduleSessionViewController: UIViewController {
             return alert("Pick a time", "Please choose an available time slot.")
         }
 
-        let vc = PaymentViewController(area: selectedArea.rawValue, date: chosenDate, time: selectedTimeButton.currentTitle ?? "")
+        // Preserve the original ordering from MentorshipArea.allCases
+        let selectedOrdered = MentorshipArea.allCases.filter { selectedAreas.contains($0) }
+        let areaString = selectedOrdered.map { $0.rawValue }.joined(separator: ", ")
+
+        let vc = PaymentViewController(area: areaString, date: chosenDate, time: selectedTimeButton.currentTitle ?? "")
         navigationController?.pushViewController(vc, animated: true)
     }
 
@@ -432,7 +422,8 @@ final class ScheduleSessionViewController: UIViewController {
 
         // find index of headerRow to insert after it
         guard let headerIndex = mainStack.arrangedSubviews.firstIndex(where: { $0 === headerRow }) else {
-            // fallback: append at end
+            // fallback: append at end (with spacer)
+            mainStack.addArrangedSubview(UIView(height: 12))
             mainStack.addArrangedSubview(availableTitle)
             mainStack.addArrangedSubview(timeSlotsScroll)
             return
@@ -450,10 +441,27 @@ final class ScheduleSessionViewController: UIViewController {
             ])
         }
 
-        // insert views after headerRow
+        // Insert a fixed spacer, then availableTitle, then timeSlotsScroll.
+        // This guarantees consistent vertical gap between the headerRow and the Available Time section.
+        let spacer = UIView(height: 12)
+
         let insertIndex = headerIndex + 1
-        mainStack.insertArrangedSubview(availableTitle, at: insertIndex)
-        mainStack.insertArrangedSubview(timeSlotsScroll, at: insertIndex + 1)
+        mainStack.insertArrangedSubview(spacer, at: insertIndex)
+        mainStack.insertArrangedSubview(availableTitle, at: insertIndex + 1)
+        mainStack.insertArrangedSubview(timeSlotsScroll, at: insertIndex + 2)
+
+        // Ensure availableTitle and timeSlotsScroll align to the same leading/trailing as other section titles
+        availableTitle.translatesAutoresizingMaskIntoConstraints = false
+        timeSlotsScroll.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            availableTitle.leadingAnchor.constraint(equalTo: mainStack.leadingAnchor),
+            availableTitle.trailingAnchor.constraint(equalTo: mainStack.trailingAnchor),
+
+            timeSlotsScroll.leadingAnchor.constraint(equalTo: mainStack.leadingAnchor),
+            timeSlotsScroll.trailingAnchor.constraint(equalTo: mainStack.trailingAnchor),
+            // give the horizontal time slots a reasonable fixed height so the stack sizes predictably
+            timeSlotsScroll.heightAnchor.constraint(equalToConstant: 46)
+        ])
 
         // set initial alpha to 0 and then animate to 1
         availableTitle.alpha = 0.0
@@ -551,9 +559,8 @@ final class ScheduleSessionViewController: UIViewController {
             timeSlotsStack.heightAnchor.constraint(equalTo: timeSlotsScroll.frameLayoutGuide.heightAnchor)
         ])
 
-        // Main content stack: NOTE we do NOT include availableTitle/timeSlotsScroll here initially
+        // Main content stack: NOTE we removed the Attach Materials UI per request
         mainStack = UIStackView(arrangedSubviews: [
-            titleLabel,
             UIView(height: 8),
             mentorshipTitle,
             mentorshipStack,
@@ -563,10 +570,6 @@ final class ScheduleSessionViewController: UIViewController {
             UIView(height: 8),
             // availableTitle and timeSlotsScroll WILL be inserted later after headerRow
             UIView(height: 16),
-            attachTitle,
-            uploadButton,
-            uploadHint,
-            UIView(height: 12),
             infoBox
         ])
         mainStack.axis = .vertical

@@ -62,6 +62,10 @@ final class MentorPanelViewController: UIViewController {
         tv.isScrollEnabled = false
         tv.estimatedRowHeight = 100
         tv.rowHeight = UITableView.automaticDimension
+        // ensure iOS adjusts content insets consistently
+        if #available(iOS 11.0, *) {
+            tv.contentInsetAdjustmentBehavior = .automatic
+        }
         return tv
     }()
 
@@ -127,6 +131,15 @@ final class MentorPanelViewController: UIViewController {
         navigationController?.interactivePopGestureRecognizer?.isEnabled = false
     }
 
+    // Important: refresh layout when coming back to this screen
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        // ensure table/collection recompute sizes based on current safe area / widths
+        updateSessionsLayout()
+        collectionView.reloadData()
+        collectionView.collectionViewLayout.invalidateLayout()
+    }
+
     // MARK: - Setup
     private func setupHierarchy() {
         view.addSubview(titleLabel)
@@ -143,39 +156,43 @@ final class MentorPanelViewController: UIViewController {
     }
 
     private func setupConstraints() {
+        // use safe area horizontally so layout doesn't jump when nav/tab bar or insets change
         let pad: CGFloat = 20
+        let safe = view.safeAreaLayoutGuide
 
         NSLayoutConstraint.activate([
-            titleLabel.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 16),
-            titleLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: pad),
+            titleLabel.topAnchor.constraint(equalTo: safe.topAnchor, constant: 16),
+            titleLabel.leadingAnchor.constraint(equalTo: safe.leadingAnchor, constant: pad),
 
             subtitleLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 6),
             subtitleLabel.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
 
             segmentControl.topAnchor.constraint(equalTo: subtitleLabel.bottomAnchor, constant: 18),
-            segmentControl.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            // center relative to safe area too
+            segmentControl.centerXAnchor.constraint(equalTo: safe.centerXAnchor),
             segmentControl.widthAnchor.constraint(equalToConstant: 220),
             segmentControl.heightAnchor.constraint(equalToConstant: 36),
 
             sessionsTitleLabel.topAnchor.constraint(equalTo: segmentControl.bottomAnchor, constant: 18),
-            sessionsTitleLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: pad),
+            sessionsTitleLabel.leadingAnchor.constraint(equalTo: safe.leadingAnchor, constant: pad),
 
             sessionsSeeAllButton.centerYAnchor.constraint(equalTo: sessionsTitleLabel.centerYAnchor),
-            sessionsSeeAllButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -pad),
+            sessionsSeeAllButton.trailingAnchor.constraint(equalTo: safe.trailingAnchor, constant: -pad),
 
             sessionsTableView.topAnchor.constraint(equalTo: sessionsTitleLabel.bottomAnchor, constant: 12),
-            sessionsTableView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: pad),
-            sessionsTableView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -pad),
+            sessionsTableView.leadingAnchor.constraint(equalTo: safe.leadingAnchor, constant: pad),
+            sessionsTableView.trailingAnchor.constraint(equalTo: safe.trailingAnchor, constant: -pad),
 
             mentorsLabel.topAnchor.constraint(equalTo: sessionsTableView.bottomAnchor, constant: 22),
-            mentorsLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: pad),
+            mentorsLabel.leadingAnchor.constraint(equalTo: safe.leadingAnchor, constant: pad),
 
             mentorsSeeAllButton.centerYAnchor.constraint(equalTo: mentorsLabel.centerYAnchor),
-            mentorsSeeAllButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -pad),
+            mentorsSeeAllButton.trailingAnchor.constraint(equalTo: safe.trailingAnchor, constant: -pad),
 
             collectionView.topAnchor.constraint(equalTo: mentorsLabel.bottomAnchor, constant: 12),
-            collectionView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            collectionView.trailingAnchor.constraint(equalTo: view.trailingAnchor)
+            // collection view spans full safe area width (so card width calc is consistent)
+            collectionView.leadingAnchor.constraint(equalTo: safe.leadingAnchor),
+            collectionView.trailingAnchor.constraint(equalTo: safe.trailingAnchor)
         ])
 
         sessionsTableHeightConstraint = sessionsTableView.heightAnchor.constraint(equalToConstant: 0)
@@ -215,18 +232,15 @@ final class MentorPanelViewController: UIViewController {
     @objc private func didTapSessionsSeeAll() {
         if segmentControl.selectedSegmentIndex == 0 {
             let vc = MySessionViewController()
-            vc.hidesBottomBarWhenPushed = true
             navigationController?.pushViewController(vc, animated: true)
         } else {
             let vc = AllCallsPanelViewController()
-            vc.hidesBottomBarWhenPushed = true
             navigationController?.pushViewController(vc, animated: true)
         }
     }
 
     @objc private func didTapMentorsSeeAll() {
         let vc = AllMentorsViewController()
-        vc.hidesBottomBarWhenPushed = true
         navigationController?.pushViewController(vc, animated: true)
     }
 
@@ -241,10 +255,21 @@ final class MentorPanelViewController: UIViewController {
     }
 
     private func updateSessionsLayout() {
+        // Ensure this runs on main thread and that the table lays out before measuring contentSize
         DispatchQueue.main.async {
             self.sessionsTableView.reloadData()
+            // Important: request layout on the table first so automatic dimension sizes stabilize
+            self.sessionsTableView.setNeedsLayout()
             self.sessionsTableView.layoutIfNeeded()
             self.sessionsTableHeightConstraint.constant = self.sessionsTableView.contentSize.height
+
+            // Update collection height to content if needed (optional)
+            self.collectionView.setNeedsLayout()
+            self.collectionView.layoutIfNeeded()
+            // set collectionView height to the contentSize height if you want it to fit
+            // but be careful: if empty, keep a minimum
+            let cvHeight = max(100, self.collectionView.collectionViewLayout.collectionViewContentSize.height)
+            self.collectionViewHeightConstraint.constant = cvHeight
         }
     }
 
@@ -315,6 +340,7 @@ extension MentorPanelViewController: UICollectionViewDataSource, UICollectionVie
 
         let insets = layout.sectionInset.left + layout.sectionInset.right
         let spacing = layout.minimumInteritemSpacing
+        // use cv.bounds.width which now matches safe area width because we anchored collection to safe area
         let width = floor((cv.bounds.width - insets - spacing) / 2.0)
 
         return CGSize(width: width, height: width * 0.85)
@@ -324,8 +350,6 @@ extension MentorPanelViewController: UICollectionViewDataSource, UICollectionVie
 
         let vc = BookViewController()
         vc.mentor = mentors[indexPath.item]
-        vc.hidesBottomBarWhenPushed = true
-
         navigationController?.pushViewController(vc, animated: true)
     }
 }

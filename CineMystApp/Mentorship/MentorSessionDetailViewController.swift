@@ -18,14 +18,6 @@ final class MentorSessionDetailViewController: UIViewController {
     private let scrollView = UIScrollView()
     private let content = UIStackView()
 
-    private let titleLabel: UILabel = {
-        let l = UILabel()
-        l.text = "My Session"
-        l.font = UIFont.systemFont(ofSize: 28, weight: .bold)
-        l.translatesAutoresizingMaskIntoConstraints = false
-        return l
-    }()
-
     private let imageView: UIImageView = {
         let iv = UIImageView()
         iv.layer.cornerRadius = 14
@@ -122,6 +114,21 @@ final class MentorSessionDetailViewController: UIViewController {
         super.viewDidLoad()
         view.backgroundColor = .systemBackground
 
+        // Ensure navigation bar is visible and configure large title style.
+        navigationController?.setNavigationBarHidden(false, animated: false)
+        navigationController?.navigationBar.prefersLargeTitles = true
+        navigationItem.largeTitleDisplayMode = .always
+
+        // Configure large title appearance to match the other screen
+        navigationController?.navigationBar.largeTitleTextAttributes = [
+            .font: UIFont.systemFont(ofSize: 34, weight: .bold),
+            .foregroundColor: UIColor.label
+        ]
+
+        // Initial title — updated again in populate()
+        navigationItem.title = "My Session"
+
+        // Keep custom chevron (leftBarButtonItem) — title will align with it
         navigationItem.hidesBackButton = true
         navigationItem.leftBarButtonItem = UIBarButtonItem(
             image: UIImage(systemName: "chevron.left"),
@@ -140,6 +147,9 @@ final class MentorSessionDetailViewController: UIViewController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         tabBarController?.tabBar.isHidden = true
+
+        // Re-assert prefersLargeTitles on appear (helps if other screens change it)
+        navigationController?.navigationBar.prefersLargeTitles = true
     }
 
     override func viewWillDisappear(_ animated: Bool) {
@@ -151,7 +161,7 @@ final class MentorSessionDetailViewController: UIViewController {
     private func populate() {
         // Prefer session if provided; otherwise use call (converted view)
         if let s = session {
-            titleLabel.text = "My Session"
+            navigationItem.title = "My Session"
             imageView.image = UIImage(named: s.mentorImageName) ?? UIImage(named: "Image")
             nameLabel.text = s.mentorName
             roleLabel.text = s.mentorRole ?? ""
@@ -167,7 +177,7 @@ final class MentorSessionDetailViewController: UIViewController {
             statusLabel.text = "" // no call status
         } else if let c = call {
             // Show call info but keep the same UI and same buttons (Reschedule + Cancel)
-            titleLabel.text = "Call"
+            navigationItem.title = "Call"
             imageView.image = UIImage(named: c.avatarName) ?? UIImage(named: "Image")
             nameLabel.text = c.mentorName
             roleLabel.text = c.mentorRole
@@ -184,7 +194,7 @@ final class MentorSessionDetailViewController: UIViewController {
             }
         } else {
             // fallback placeholders
-            titleLabel.text = "Details"
+            navigationItem.title = "Details"
             imageView.image = UIImage(named: "Image")
             nameLabel.text = "—"
             roleLabel.text = ""
@@ -212,12 +222,7 @@ final class MentorSessionDetailViewController: UIViewController {
 
     // MARK: layout
     private func setupLayout() {
-        view.addSubview(titleLabel)
-        NSLayoutConstraint.activate([
-            titleLabel.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8),
-            titleLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16)
-        ])
-
+        // Scroll + content stack
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         content.translatesAutoresizingMaskIntoConstraints = false
         content.axis = .vertical
@@ -226,8 +231,9 @@ final class MentorSessionDetailViewController: UIViewController {
         view.addSubview(scrollView)
         scrollView.addSubview(content)
 
+        // Top anchor: use safeArea top — large nav title is accounted for by safe area.
         NSLayoutConstraint.activate([
-            scrollView.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 12),
+            scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             scrollView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),

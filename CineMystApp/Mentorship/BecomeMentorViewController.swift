@@ -1,6 +1,8 @@
 //
-//  BecomeMentorViewController+Areas.swift
+//  BecomeMentorViewController.swift
 //  ProgrammaticMentorship
+//
+//  Full BecomeMentor + area selector + helpers (single-file)
 //
 
 import UIKit
@@ -39,12 +41,15 @@ final class BecomeMentorViewController: UITableViewController {
         case basicInfo = 0, location, expertise, availability, attach
     }
 
+    // MARK: - Brand color
+    private let brandColor = UIColor(red: 0x43/255, green: 0x16/255, blue: 0x31/255, alpha: 1)
+
     // MARK: - Submit Button
     private lazy var submitButton: UIButton = {
         let b = UIButton(type: .system)
         b.setTitle("Submit", for: .normal)
         b.setTitleColor(.white, for: .normal)
-        b.backgroundColor = UIColor(red: 0x43/255, green: 0x16/255, blue: 0x31/255, alpha: 1)
+        b.backgroundColor = brandColor
         b.layer.cornerRadius = 12
         b.titleLabel?.font = UIFont.systemFont(ofSize: 16, weight: .semibold)
         b.addTarget(self, action: #selector(didTapSubmit), for: .touchUpInside)
@@ -142,7 +147,6 @@ final class BecomeMentorViewController: UITableViewController {
                 let cell = tableView.dequeueReusableCell(withIdentifier: ID.textField, for: indexPath) as! TextFieldCell
                 cell.configure(placeholder: "About you", text: form.about) { self.form.about = $0 }
                 return cell
-
 
             case 3:
                 let cell = tableView.dequeueReusableCell(
@@ -277,7 +281,6 @@ final class BecomeMentorViewController: UITableViewController {
 
         tableView.deselectRow(at: indexPath, animated: true)
 
-
         switch Section(rawValue: indexPath.section)! {
         case .basicInfo:
             if indexPath.row == 3 { presentYearsActionSheet() }
@@ -345,8 +348,10 @@ final class BecomeMentorViewController: UITableViewController {
 
     // MARK: - Add Slot Sheet
     private func presentAddSlot() {
-        let vc = AddSlotViewController()
-        vc.completion = { [weak self] date in
+        let vc = AddSlotViewController(initialDate: Date(), brand: brandColor)
+
+        // Annotate closure parameter type so compiler always knows it
+        vc.completion = { [weak self] (date: Date) in
             guard let self = self else { return }
 
             if !self.form.slots.contains(where: {
@@ -357,7 +362,23 @@ final class BecomeMentorViewController: UITableViewController {
                 self.tableView.reloadSections([Section.availability.rawValue], with: .automatic)
             }
         }
-        present(UINavigationController(rootViewController: vc), animated: true)
+
+        // present as sheet with nav controller so it looks native
+        let nav = UINavigationController(rootViewController: vc)
+        nav.modalPresentationStyle = .pageSheet
+        vc.preferredContentSize = CGSize(width: view.bounds.width, height: 520)
+
+        if #available(iOS 15.0, *) {
+            if let sheet = nav.sheetPresentationController {
+                sheet.detents = [.medium(), .large()]
+                sheet.selectedDetentIdentifier = .medium
+                sheet.prefersGrabberVisible = true
+                sheet.prefersScrollingExpandsWhenScrolledToEdge = false
+                sheet.preferredCornerRadius = 14
+            }
+        }
+
+        present(nav, animated: true)
     }
 
     private func formattedSlot(_ d: Date) -> String {
@@ -367,14 +388,16 @@ final class BecomeMentorViewController: UITableViewController {
         return df.string(from: d)
     }
 
-    // MARK: - Area Selector
+    // MARK: - Area Selector presentation (sheet)
     private func presentAreaSelector() {
         let vc = AreaSelectionViewController(selected: Array(form.mentorshipAreas.keys))
-        vc.completion = { [weak self] selected in
+
+        // annotate closure parameter type
+        vc.completion = { [weak self] (selected: [String]) in
             guard let self = self else { return }
 
-            // Add new areas
-            selected.forEach { if self.form.mentorshipAreas[$0] == nil { self.form.mentorshipAreas[$0] = "" }}
+            // Add new areas with empty price if missing
+            selected.forEach { if self.form.mentorshipAreas[$0] == nil { self.form.mentorshipAreas[$0] = "" } }
 
             // Remove unselected
             let removed = Set(self.form.mentorshipAreas.keys).subtracting(selected)
@@ -383,7 +406,22 @@ final class BecomeMentorViewController: UITableViewController {
             self.tableView.reloadSections([Section.expertise.rawValue], with: .automatic)
         }
 
-        present(UINavigationController(rootViewController: vc), animated: true)
+        // Wrap in nav controller so we keep Cancel/Done bar items
+        let nav = UINavigationController(rootViewController: vc)
+        nav.modalPresentationStyle = .pageSheet
+        vc.preferredContentSize = CGSize(width: view.bounds.width, height: 420)
+
+        if #available(iOS 15.0, *) {
+            if let sheet = nav.sheetPresentationController {
+                sheet.detents = [.medium(), .large()]
+                sheet.selectedDetentIdentifier = .medium
+                sheet.prefersGrabberVisible = true
+                sheet.prefersScrollingExpandsWhenScrolledToEdge = false
+                sheet.preferredCornerRadius = 14
+            }
+        }
+
+        present(nav, animated: true)
     }
 
     // MARK: - Price Sheet
@@ -460,18 +498,51 @@ final class BecomeMentorViewController: UITableViewController {
         }
 
         // on success show alert then push MentorPanelViewController
-        showAlert(title: "Submitted", message: "Your profile has been submitted.") {
+        showAlert(title: "Submitted", message: "Your profile has been submitted.") { [weak self] in
             DispatchQueue.main.async {
-                if let nav = self.navigationController {
-                    let mentorPanel = MentorPanelViewController()
-                    mentorPanel.hidesBottomBarWhenPushed = true
-                    nav.pushViewController(mentorPanel, animated: true)
-                } else {
-                    // fallback: present modally wrapped in a nav controller
-                    let mentorPanel = MentorPanelViewController()
-                    let nav = UINavigationController(rootViewController: mentorPanel)
-                    self.present(nav, animated: true, completion: nil)
+                guard let self = self else { return }
+
+                // Create mentor panel
+                let mentorPanel = MentorPanelViewController()
+
+                // -------------------------
+                // IMPORTANT: push into the Mentorship tab's nav stack so the tab bar stays visible.
+                // Your CineMystTabBarController sets the Mentorship tab at index 3.
+                // -------------------------
+
+                if let tabBar = self.tabBarController {
+                    let mentorshipIndex = 3
+                    if mentorshipIndex < (tabBar.viewControllers?.count ?? 0),
+                       let mentorNav = tabBar.viewControllers?[mentorshipIndex] as? UINavigationController {
+                        // Build the desired stack: keep MentorshipHome then MentorPanel on top.
+                        let home = MentorshipHomeViewController()
+                        mentorNav.setViewControllers([home, mentorPanel], animated: true)
+                        tabBar.selectedIndex = mentorshipIndex
+                        return
+                    }
+
+                    // Fallback: find first UINavigationController in tab bar, push there and switch tab
+                    if let vcs = tabBar.viewControllers {
+                        for (idx, vc) in vcs.enumerated() {
+                            if let nav = vc as? UINavigationController {
+                                nav.pushViewController(mentorPanel, animated: true)
+                                tabBar.selectedIndex = idx
+                                return
+                            }
+                        }
+                    }
                 }
+
+                // Final fallback: push on local navigation controller (may hide tab bar)
+                if let nav = self.navigationController {
+                    nav.pushViewController(mentorPanel, animated: true)
+                    return
+                }
+
+                // Last resort: present modally
+                let modal = UINavigationController(rootViewController: mentorPanel)
+                modal.modalPresentationStyle = .fullScreen
+                self.present(modal, animated: true, completion: nil)
             }
         }
     }
@@ -507,14 +578,12 @@ extension BecomeMentorViewController: PHPickerViewControllerDelegate {
     }
 }
 
-// MARK: - AreaSelectionViewController
+// MARK: - AreaSelectionViewController (native iOS style)
+// (same as before)
 final class AreaSelectionViewController: UITableViewController {
 
-    private let allAreas = [
-        "Acting", "Communication", "Directing", "Dubbing",
-        "Voice over", "Editing", "Casting", "Writing", "Others"
-    ]
-
+    private let topAreas = ["Acting", "Communication", "Directing", "Dubbing"]
+    private var customAreas: [String] = []
     private var selected: Set<String>
     var completion: (([String]) -> Void)?
 
@@ -522,49 +591,149 @@ final class AreaSelectionViewController: UITableViewController {
         self.selected = Set(selected)
         super.init(style: .insetGrouped)
         title = "Mentorship Area"
+
         navigationItem.rightBarButtonItem =
             UIBarButtonItem(title: "Done", style: .done, target: self, action: #selector(doneTapped))
+
         navigationItem.leftBarButtonItem =
             UIBarButtonItem(barButtonSystemItem: .cancel, target: self, action: #selector(cancelTapped))
     }
 
-    required init?(coder: NSCoder) { fatalError() }
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        tableView.register(UITableViewCell.self, forCellReuseIdentifier: "cell")
+
+        tableView.register(UITableViewCell.self, forCellReuseIdentifier: "areaCell")
+        tableView.tableFooterView = UIView()
+        tableView.rowHeight = 54
+
+        // if initial selection contains items outside topAreas, treat them as customAreas
+        let initialCustom = selected.subtracting(topAreas)
+        if !initialCustom.isEmpty {
+            customAreas = Array(initialCustom)
+        }
     }
 
-    override func tableView(_ tableView: UITableView,
-                            numberOfRowsInSection section: Int) -> Int {
-        allAreas.count
+    // rows = topAreas + customAreas + 1 (Add custom row)
+    override func numberOfSections(in tableView: UITableView) -> Int { 1 }
+    override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+        return topAreas.count + customAreas.count + 1
     }
 
     override func tableView(_ tableView: UITableView,
                             cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let area = allAreas[indexPath.row]
-        let cell = tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath)
 
+        let topCount = topAreas.count
+        // top builtin areas
+        if indexPath.row < topCount {
+            let area = topAreas[indexPath.row]
+            let cell = tableView.dequeueReusableCell(withIdentifier: "areaCell", for: indexPath)
+            var config = cell.defaultContentConfiguration()
+            config.text = area
+            config.textProperties.font = UIFont.systemFont(ofSize: 17)
+            cell.contentConfiguration = config
+            cell.accessoryType = selected.contains(area) ? .checkmark : .none
+            cell.selectionStyle = .default
+            return cell
+        }
+
+        // custom areas rows
+        let customStart = topCount
+        if indexPath.row < customStart + customAreas.count {
+            let area = customAreas[indexPath.row - customStart]
+            let cell = tableView.dequeueReusableCell(withIdentifier: "areaCell", for: indexPath)
+            var config = cell.defaultContentConfiguration()
+            config.text = area
+            config.textProperties.font = UIFont.systemFont(ofSize: 17)
+            cell.contentConfiguration = config
+            cell.accessoryType = selected.contains(area) ? .checkmark : .none
+            cell.selectionStyle = .default
+            return cell
+        }
+
+        // final row: "Add custom..."
+        let cell = tableView.dequeueReusableCell(withIdentifier: "areaCell", for: indexPath)
         var config = cell.defaultContentConfiguration()
-        config.text = area
+        config.text = "Add custom..."
+        config.textProperties.font = UIFont.systemFont(ofSize: 17)
+        // <- changed from .systemPurple to a system grey-friendly color so it matches the rest of the UI
+        config.textProperties.color = .secondaryLabel
         cell.contentConfiguration = config
-
-        cell.accessoryType = selected.contains(area) ? .checkmark : .none
+        cell.accessoryType = .none
+        cell.selectionStyle = .default
         return cell
     }
 
     override func tableView(_ tableView: UITableView,
                             didSelectRowAt indexPath: IndexPath) {
 
-        let area = allAreas[indexPath.row]
+        tableView.deselectRow(at: indexPath, animated: true)
+        let topCount = topAreas.count
+        let customStart = topCount
+        let addRowIndex = topCount + customAreas.count
 
+        // builtin area tapped
+        if indexPath.row < topCount {
+            let area = topAreas[indexPath.row]
+            toggleSelection(for: area)
+            tableView.reloadRows(at: [indexPath], with: .automatic)
+            return
+        }
+
+        // existing custom area tapped
+        if indexPath.row < addRowIndex {
+            let area = customAreas[indexPath.row - customStart]
+            toggleSelection(for: area)
+            tableView.reloadRows(at: [indexPath], with: .automatic)
+            return
+        }
+
+        // "Add custom..." tapped -> show alert with text field
+        if indexPath.row == addRowIndex {
+            presentAddCustomAlert()
+        }
+    }
+
+    private func toggleSelection(for area: String) {
         if selected.contains(area) {
             selected.remove(area)
         } else {
             selected.insert(area)
         }
+    }
 
-        tableView.reloadRows(at: [indexPath], with: .automatic)
+    private func presentAddCustomAlert() {
+        let ac = UIAlertController(title: "Add custom area", message: nil, preferredStyle: .alert)
+        ac.addTextField { tf in
+            tf.placeholder = "e.g. Casting"
+            tf.autocapitalizationType = .words
+        }
+        ac.addAction(UIAlertAction(title: "Add", style: .default) { [weak self] _ in
+            guard let self = self, let txt = ac.textFields?.first?.text?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !txt.isEmpty else { return }
+
+            // avoid duplicates (case-insensitive)
+            let lower = txt.lowercased()
+            if self.topAreas.contains(where: { $0.lowercased() == lower }) ||
+               self.customAreas.contains(where: { $0.lowercased() == lower }) {
+                // duplicate: ignore for now (could show a warning)
+                return
+            }
+
+            // append custom area, select it, and insert the row before the Add row
+            self.customAreas.append(txt)
+            self.selected.insert(txt)
+            let insertedIndex = IndexPath(row: self.topAreas.count + self.customAreas.count - 1, section: 0)
+            self.tableView.insertRows(at: [insertedIndex], with: .automatic)
+
+            // scroll to the newly added item
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                self.tableView.scrollToRow(at: insertedIndex, at: .middle, animated: true)
+            }
+        })
+        ac.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        present(ac, animated: true)
     }
 
     @objc private func doneTapped() {
@@ -577,94 +746,389 @@ final class AreaSelectionViewController: UITableViewController {
     }
 }
 
-// MARK: - AddSlotViewController
+// MARK: - AddSlotViewController (CUSTOM CALENDAR)
 final class AddSlotViewController: UIViewController {
 
+    // public completion to return chosen Date
     var completion: ((Date) -> Void)?
 
-    private let datePicker: UIDatePicker = {
-        let dp = UIDatePicker()
-        dp.datePickerMode = .date
-        if #available(iOS 13.4, *) {
-            dp.preferredDatePickerStyle = .inline
-        }
-        dp.translatesAutoresizingMaskIntoConstraints = false
-        return dp
-    }()
+    private let brandColor: UIColor
+    private var currentMonth: Date
+    private var selectedDate: Date
+    private var calendar = Calendar.current
 
+    // Collection sizing helpers
+    private var collectionViewHeightConstraint: NSLayoutConstraint?
+    private let dayCellHeight: CGFloat = 44
+    private let rowSpacing: CGFloat = 8
+
+    // UI
+    private let monthLabel = UILabel()
+    private let prevButton = UIButton(type: .system)
+    private let nextButton = UIButton(type: .system)
+    private var collectionView: UICollectionView!
     private let timePicker: UIDatePicker = {
         let tp = UIDatePicker()
         tp.datePickerMode = .time
+        if #available(iOS 13.4, *) {
+            tp.preferredDatePickerStyle = .compact
+        }
         tp.translatesAutoresizingMaskIntoConstraints = false
         return tp
     }()
-
     private lazy var addButton: UIButton = {
         let b = UIButton(type: .system)
         b.setTitle("Add Slot", for: .normal)
-        b.backgroundColor = UIColor(red: 0x43/255, green: 0x16/255, blue: 0x31/255, alpha: 1)
+        b.backgroundColor = brandColor
         b.setTitleColor(.white, for: .normal)
-        b.layer.cornerRadius = 10
-        b.titleLabel?.font = UIFont.systemFont(ofSize: 16, weight: .semibold)
+        b.layer.cornerRadius = 12
+        b.titleLabel?.font = UIFont.systemFont(ofSize: 18, weight: .semibold)
         b.translatesAutoresizingMaskIntoConstraints = false
         b.addTarget(self, action: #selector(addTapped), for: .touchUpInside)
         return b
     }()
 
+    // init with brand color and optional initial date
+    init(initialDate: Date = Date(), brand: UIColor) {
+        self.brandColor = brand
+        self.currentMonth = calendar.startOfMonth(for: initialDate)
+        self.selectedDate = initialDate
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
     override func viewDidLoad() {
         super.viewDidLoad()
+        title = "Add Availability"
         view.backgroundColor = .systemBackground
 
-        title = "Add Availability"
         navigationItem.rightBarButtonItem =
-            UIBarButtonItem(barButtonSystemItem: .cancel, target: self, action: #selector(cancel))
+            UIBarButtonItem(title: "Cancel", style: .plain, target: self, action: #selector(cancelTapped))
 
-        view.addSubview(datePicker)
-        view.addSubview(timePicker)
-        view.addSubview(addButton)
+        setupHeader()
+        setupCollection()
+        setupLayout()
+        timePicker.tintColor = brandColor
+
+        // initial height calculation & layout
+        updateCollectionHeight()
+    }
+
+    private func setupHeader() {
+        monthLabel.translatesAutoresizingMaskIntoConstraints = false
+        monthLabel.font = UIFont.systemFont(ofSize: 20, weight: .semibold)
+        monthLabel.textAlignment = .left
+        monthLabel.text = monthTitle(for: currentMonth)
+
+        prevButton.translatesAutoresizingMaskIntoConstraints = false
+        prevButton.setTitle("‹", for: .normal)
+        prevButton.titleLabel?.font = UIFont.systemFont(ofSize: 26)
+        prevButton.setTitleColor(brandColor, for: .normal)
+        prevButton.addTarget(self, action: #selector(prevMonth), for: .touchUpInside)
+
+        nextButton.translatesAutoresizingMaskIntoConstraints = false
+        nextButton.setTitle("›", for: .normal)
+        nextButton.titleLabel?.font = UIFont.systemFont(ofSize: 26)
+        nextButton.setTitleColor(brandColor, for: .normal)
+        nextButton.addTarget(self, action: #selector(nextMonth), for: .touchUpInside)
+    }
+
+    private func setupCollection() {
+        let layout = UICollectionViewFlowLayout()
+        layout.minimumLineSpacing = rowSpacing
+        layout.minimumInteritemSpacing = 0
+
+        collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)
+        collectionView.translatesAutoresizingMaskIntoConstraints = false
+        collectionView.register(DayCell.self, forCellWithReuseIdentifier: DayCell.reuseID)
+        collectionView.backgroundColor = .clear
+        collectionView.delegate = self
+        collectionView.dataSource = self
+        collectionView.isScrollEnabled = false
+        collectionView.contentInset = UIEdgeInsets(top: 8, left: 0, bottom: 8, right: 0)
+    }
+
+    private func setupLayout() {
+        let container = UIView()
+        container.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(container)
+
+        let header = UIView()
+        header.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(header)
+
+        header.addSubview(monthLabel)
+        header.addSubview(prevButton)
+        header.addSubview(nextButton)
+
+        container.addSubview(collectionView)
+
+        // weekday labels row
+        let weekdayStack = UIStackView()
+        weekdayStack.translatesAutoresizingMaskIntoConstraints = false
+        weekdayStack.axis = .horizontal
+        weekdayStack.distribution = .fillEqually
+
+        // Use calendar's shortWeekdaySymbols (locale aware)
+        let symbols = calendar.shortWeekdaySymbols.map { $0.uppercased() }
+        for s in symbols {
+            let l = UILabel()
+            l.font = UIFont.systemFont(ofSize: 12, weight: .semibold)
+            l.textColor = .secondaryLabel
+            l.textAlignment = .center
+            l.text = s
+            weekdayStack.addArrangedSubview(l)
+        }
+        container.addSubview(weekdayStack)
+
+        // timeRow
+        let timeRow = UIView()
+        timeRow.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(timeRow)
+        timeRow.addSubview(timePicker)
+
+        container.addSubview(addButton)
 
         NSLayoutConstraint.activate([
-            datePicker.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 20),
-            datePicker.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
-            datePicker.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+            container.leadingAnchor.constraint(equalTo: view.layoutMarginsGuide.leadingAnchor),
+            container.trailingAnchor.constraint(equalTo: view.layoutMarginsGuide.trailingAnchor),
+            container.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8),
+            container.bottomAnchor.constraint(lessThanOrEqualTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -16),
 
-            timePicker.topAnchor.constraint(equalTo: datePicker.bottomAnchor, constant: 16),
-            timePicker.leadingAnchor.constraint(equalTo: datePicker.leadingAnchor),
-            timePicker.trailingAnchor.constraint(equalTo: datePicker.trailingAnchor),
+            header.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            header.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            header.topAnchor.constraint(equalTo: container.topAnchor),
+            header.heightAnchor.constraint(equalToConstant: 44),
 
-            addButton.topAnchor.constraint(equalTo: timePicker.bottomAnchor, constant: 24),
-            addButton.leadingAnchor.constraint(equalTo: datePicker.leadingAnchor),
-            addButton.trailingAnchor.constraint(equalTo: datePicker.trailingAnchor),
-            addButton.heightAnchor.constraint(equalToConstant: 48)
+            monthLabel.leadingAnchor.constraint(equalTo: header.leadingAnchor),
+            monthLabel.centerYAnchor.constraint(equalTo: header.centerYAnchor),
+
+            nextButton.trailingAnchor.constraint(equalTo: header.trailingAnchor),
+            nextButton.centerYAnchor.constraint(equalTo: header.centerYAnchor),
+
+            prevButton.trailingAnchor.constraint(equalTo: nextButton.leadingAnchor, constant: -12),
+            prevButton.centerYAnchor.constraint(equalTo: header.centerYAnchor),
+
+            weekdayStack.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            weekdayStack.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            weekdayStack.topAnchor.constraint(equalTo: header.bottomAnchor),
+
+            // collectionView top/leading/trailing (height will be set by constraint)
+            collectionView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            collectionView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            collectionView.topAnchor.constraint(equalTo: weekdayStack.bottomAnchor, constant: 6),
+
+            timeRow.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            timeRow.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            timeRow.topAnchor.constraint(equalTo: collectionView.bottomAnchor, constant: 12),
+            timeRow.heightAnchor.constraint(greaterThanOrEqualToConstant: 44),
+
+            timePicker.trailingAnchor.constraint(equalTo: timeRow.trailingAnchor),
+            timePicker.centerYAnchor.constraint(equalTo: timeRow.centerYAnchor),
+
+            addButton.topAnchor.constraint(equalTo: timeRow.bottomAnchor, constant: 28),
+            addButton.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            addButton.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            addButton.heightAnchor.constraint(equalToConstant: 52),
+
+            addButton.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -8)
         ])
+
+        // create & store the height constraint (value will be updated)
+        collectionViewHeightConstraint = collectionView.heightAnchor.constraint(equalToConstant: 200)
+        collectionViewHeightConstraint?.isActive = true
+    }
+
+    // month title helper
+    private func monthTitle(for date: Date) -> String {
+        let df = DateFormatter()
+        df.dateFormat = "LLLL yyyy"
+        return df.string(from: date)
+    }
+
+    @objc private func prevMonth() {
+        currentMonth = calendar.date(byAdding: .month, value: -1, to: currentMonth) ?? currentMonth
+        monthLabel.text = monthTitle(for: currentMonth)
+        updateCollectionHeight()
+    }
+
+    @objc private func nextMonth() {
+        currentMonth = calendar.date(byAdding: .month, value: 1, to: currentMonth) ?? currentMonth
+        monthLabel.text = monthTitle(for: currentMonth)
+        updateCollectionHeight()
+    }
+
+    @objc private func cancelTapped() {
+        dismiss(animated: true)
     }
 
     @objc private func addTapped() {
+        // Compose selectedDate (date-only) with chosen time
+        let dateComponents = calendar.dateComponents([.year, .month, .day], from: selectedDate)
+        let timeComponents = calendar.dateComponents([.hour, .minute], from: timePicker.date)
         var comps = DateComponents()
-
-        let date = datePicker.date
-        let time = timePicker.date
-
-        let c = Calendar.current
-        comps.year = c.component(.year, from: date)
-        comps.month = c.component(.month, from: date)
-        comps.day = c.component(.day, from: date)
-        comps.hour = c.component(.hour, from: time)
-        comps.minute = c.component(.minute, from: time)
-
-        let finalDate = Calendar.current.date(from: comps) ?? date
-        completion?(finalDate)
+        comps.year = dateComponents.year
+        comps.month = dateComponents.month
+        comps.day = dateComponents.day
+        comps.hour = timeComponents.hour
+        comps.minute = timeComponents.minute
+        let final = calendar.date(from: comps) ?? selectedDate
+        completion?(final)
         dismiss(animated: true)
     }
 
-    @objc private func cancel() {
-        dismiss(animated: true)
+    // compute how many rows (weeks) needed for the current month
+    private func monthRows(for month: Date) -> Int {
+        let firstOfMonth = month
+        let weekdayOfFirst = calendar.component(.weekday, from: firstOfMonth) // 1=Sun
+        let blanks = (weekdayOfFirst - calendar.firstWeekday + 7) % 7
+        let days = calendar.range(of: .day, in: .month, for: month)!.count
+        let totalSlots = blanks + days
+        return Int(ceil(Double(totalSlots) / 7.0))
+    }
+
+    private func updateCollectionHeight() {
+        let rows = monthRows(for: currentMonth)
+        let totalHeight = CGFloat(rows) * dayCellHeight + CGFloat(max(0, rows - 1)) * rowSpacing + collectionView.contentInset.top + collectionView.contentInset.bottom
+        collectionViewHeightConstraint?.constant = totalHeight
+        collectionView.reloadData()
+        view.layoutIfNeeded()
     }
 }
 
-// MARK: - TextFieldCell
-final class TextFieldCell: UITableViewCell, UITextFieldDelegate {
+// MARK: - Collection View (calendar grid)
+extension AddSlotViewController: UICollectionViewDataSource, UICollectionViewDelegateFlowLayout {
 
+    // We show a 7-column grid for the month.
+    func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
+        // number of slots = leading blanks + days in month
+        let firstOfMonth = currentMonth
+        let weekdayOfFirst = calendar.component(.weekday, from: firstOfMonth) // 1 = Sun
+        let leadingBlanks = weekdayOfFirst - calendar.firstWeekday
+        // normalize to 0..6
+        let blanks = (leadingBlanks + 7) % 7
+        let range = calendar.range(of: .day, in: .month, for: currentMonth)!
+        return blanks + range.count
+    }
+
+    func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
+        let cell = collectionView.dequeueReusableCell(withReuseIdentifier: DayCell.reuseID, for: indexPath) as! DayCell
+
+        // compute day for this index
+        let firstOfMonth = currentMonth
+        let weekdayOfFirst = calendar.component(.weekday, from: firstOfMonth)
+        let blanks = (weekdayOfFirst - calendar.firstWeekday + 7) % 7
+        let dayIndex = indexPath.item - blanks + 1
+
+        let range = calendar.range(of: .day, in: .month, for: currentMonth)!
+        if dayIndex >= 1 && dayIndex <= range.count {
+            var comps = calendar.dateComponents([.year, .month], from: currentMonth)
+            comps.day = dayIndex
+            let date = calendar.date(from: comps)!
+            cell.configure(day: dayIndex, isSelected: calendar.isDate(date, inSameDayAs: selectedDate), brand: brandColor, isInMonth: true)
+        } else {
+            cell.configureEmpty()
+        }
+
+        return cell
+    }
+
+    // cell size - divide width into 7 columns with some spacing
+    func collectionView(_ collectionView: UICollectionView,
+                        layout collectionViewLayout: UICollectionViewLayout,
+                        sizeForItemAt indexPath: IndexPath) -> CGSize {
+        let available = collectionView.bounds.width - collectionView.contentInset.left - collectionView.contentInset.right
+        let w = floor(available / 7.0)
+        return CGSize(width: w, height: dayCellHeight)
+    }
+
+    func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
+        // compute day for this index
+        let firstOfMonth = currentMonth
+        let weekdayOfFirst = calendar.component(.weekday, from: firstOfMonth)
+        let blanks = (weekdayOfFirst - calendar.firstWeekday + 7) % 7
+        let dayIndex = indexPath.item - blanks + 1
+        let range = calendar.range(of: .day, in: .month, for: currentMonth)!
+
+        guard dayIndex >= 1 && dayIndex <= range.count else { return }
+
+        var comps = calendar.dateComponents([.year, .month], from: currentMonth)
+        comps.day = dayIndex
+        if let date = calendar.date(from: comps) {
+            // set selected and reload visible cells — this provides immediate, consistent filled styling
+            selectedDate = date
+            collectionView.reloadData()
+        }
+    }
+}
+
+// MARK: - Day cell
+private final class DayCell: UICollectionViewCell {
+
+    static let reuseID = "DayCell"
+
+    private let dayLabel = UILabel()
+    private let circleView = UIView()
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        contentView.addSubview(circleView)
+        contentView.addSubview(dayLabel)
+
+        circleView.translatesAutoresizingMaskIntoConstraints = false
+        dayLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        dayLabel.textAlignment = .center
+        dayLabel.font = UIFont.systemFont(ofSize: 16, weight: .semibold)
+
+        NSLayoutConstraint.activate([
+            circleView.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+            circleView.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
+            circleView.widthAnchor.constraint(equalToConstant: 36),
+            circleView.heightAnchor.constraint(equalToConstant: 36),
+
+            dayLabel.centerXAnchor.constraint(equalTo: circleView.centerXAnchor),
+            dayLabel.centerYAnchor.constraint(equalTo: circleView.centerYAnchor)
+        ])
+
+        circleView.layer.cornerRadius = 18
+        circleView.isHidden = true
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    func configure(day: Int, isSelected: Bool, brand: UIColor, isInMonth: Bool) {
+        dayLabel.text = "\(day)"
+        dayLabel.textColor = isInMonth ? .label : .secondaryLabel
+
+        if isSelected {
+            circleView.backgroundColor = brand
+            dayLabel.textColor = .white
+            circleView.isHidden = false
+        } else {
+            circleView.backgroundColor = .clear
+            circleView.isHidden = true
+            dayLabel.textColor = .label
+        }
+    }
+
+    func configureEmpty() {
+        dayLabel.text = ""
+        circleView.isHidden = true
+    }
+}
+
+// MARK: - Calendar helpers
+private extension Calendar {
+    func startOfMonth(for date: Date) -> Date {
+        let comps = self.dateComponents([.year, .month], from: date)
+        return self.date(from: comps)!
+    }
+}
+
+// MARK: - Minimal cells (TextFieldCell, TextViewCell, PickerCell, AvatarCell)
+final class TextFieldCell: UITableViewCell, UITextFieldDelegate {
     private let textField: UITextField = {
         let tf = UITextField()
         tf.clearButtonMode = .whileEditing
@@ -672,184 +1136,102 @@ final class TextFieldCell: UITableViewCell, UITextFieldDelegate {
         tf.translatesAutoresizingMaskIntoConstraints = false
         return tf
     }()
-
     private var changeHandler: ((String?) -> Void)?
-
-    override init(style: UITableViewCell.CellStyle,
-                  reuseIdentifier: String?) {
+    override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
         super.init(style: style, reuseIdentifier: reuseIdentifier)
-
         contentView.addSubview(textField)
-
         NSLayoutConstraint.activate([
             textField.leadingAnchor.constraint(equalTo: contentView.layoutMarginsGuide.leadingAnchor),
             textField.trailingAnchor.constraint(equalTo: contentView.layoutMarginsGuide.trailingAnchor),
             textField.topAnchor.constraint(equalTo: contentView.layoutMarginsGuide.topAnchor, constant: 6),
             textField.bottomAnchor.constraint(equalTo: contentView.layoutMarginsGuide.bottomAnchor, constant: -6)
         ])
-
         textField.delegate = self
         selectionStyle = .none
     }
-
-    required init?(coder: NSCoder) { fatalError() }
-
-    func configure(placeholder: String,
-                   text: String?,
-                   onChange: @escaping (String?) -> Void) {
-
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    func configure(placeholder: String, text: String?, onChange: @escaping (String?) -> Void) {
         textField.placeholder = placeholder
         textField.text = text
         changeHandler = onChange
     }
-
-    func textFieldDidEndEditing(_ textField: UITextField) {
-        changeHandler?(textField.text)
-    }
+    func textFieldDidEndEditing(_ textField: UITextField) { changeHandler?(textField.text) }
 }
 
-// MARK: - TextViewCell
 final class TextViewCell: UITableViewCell, UITextViewDelegate {
-
     private let textView = UITextView()
     private var changeHandler: ((String?) -> Void)?
-
-    override init(style: UITableViewCell.CellStyle,
-                  reuseIdentifier: String?) {
+    override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
         super.init(style: style, reuseIdentifier: reuseIdentifier)
-
         textView.font = UIFont.preferredFont(forTextStyle: .body)
         textView.isScrollEnabled = false
         textView.layer.cornerRadius = 8
         textView.textContainerInset = UIEdgeInsets(top: 10, left: 8, bottom: 10, right: 8)
         textView.backgroundColor = .secondarySystemBackground
-
         textView.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(textView)
-
         NSLayoutConstraint.activate([
             textView.leadingAnchor.constraint(equalTo: contentView.layoutMarginsGuide.leadingAnchor),
             textView.trailingAnchor.constraint(equalTo: contentView.layoutMarginsGuide.trailingAnchor),
             textView.topAnchor.constraint(equalTo: contentView.layoutMarginsGuide.topAnchor),
             textView.bottomAnchor.constraint(equalTo: contentView.layoutMarginsGuide.bottomAnchor)
         ])
-
         textView.delegate = self
         selectionStyle = .none
     }
-
-    required init?(coder: NSCoder) { fatalError() }
-
-    func configure(text: String?,
-                   placeholder: String,
-                   onChange: @escaping (String?) -> Void) {
-
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    func configure(text: String?, placeholder: String = "", onChange: @escaping (String?) -> Void) {
         changeHandler = onChange
-
-        if let t = text, !t.isEmpty {
-            textView.text = t
-            textView.textColor = .label
-        } else {
-            textView.text = placeholder
-            textView.textColor = .secondaryLabel
-        }
+        if let t = text, !t.isEmpty { textView.text = t; textView.textColor = .label }
+        else { textView.text = placeholder; textView.textColor = .secondaryLabel }
     }
-
     func textViewDidBeginEditing(_ textView: UITextView) {
-        if textView.textColor == .secondaryLabel {
-            textView.text = ""
-            textView.textColor = .label
-        }
+        if textView.textColor == .secondaryLabel { textView.text = ""; textView.textColor = .label }
     }
-
-    func textViewDidEndEditing(_ textView: UITextView) {
-        changeHandler?(textView.text)
-    }
+    func textViewDidEndEditing(_ textView: UITextView) { changeHandler?(textView.text) }
 }
 
-// MARK: - PickerCell
 final class PickerCell: UITableViewCell {
-
     private var datePicker: UIDatePicker?
     private var handler: ((Date) -> Void)?
-
-    func configureAsDatePicker(mode: UIDatePicker.Mode,
-                               date: Date,
-                               onChange: @escaping (Date) -> Void) {
-
+    func configureAsDatePicker(mode: UIDatePicker.Mode, date: Date, onChange: @escaping (Date) -> Void) {
         handler = onChange
-
         if datePicker == nil {
             let dp = UIDatePicker()
             dp.datePickerMode = mode
-
-            if #available(iOS 13.4, *) {
-                dp.preferredDatePickerStyle = .inline
-            }
-
+            if #available(iOS 13.4, *) { dp.preferredDatePickerStyle = .inline }
             dp.translatesAutoresizingMaskIntoConstraints = false
             contentView.addSubview(dp)
-
             NSLayoutConstraint.activate([
                 dp.leadingAnchor.constraint(equalTo: contentView.layoutMarginsGuide.leadingAnchor),
                 dp.trailingAnchor.constraint(equalTo: contentView.layoutMarginsGuide.trailingAnchor),
                 dp.topAnchor.constraint(equalTo: contentView.layoutMarginsGuide.topAnchor),
                 dp.bottomAnchor.constraint(equalTo: contentView.layoutMarginsGuide.bottomAnchor)
             ])
-
             dp.addTarget(self, action: #selector(valueChanged(_:)), for: .valueChanged)
             datePicker = dp
         }
-
         datePicker?.date = date
     }
-
-    @objc private func valueChanged(_ dp: UIDatePicker) {
-        handler?(dp.date)
-    }
+    @objc private func valueChanged(_ dp: UIDatePicker) { handler?(dp.date) }
 }
 
-// MARK: - AvatarCell
 final class AvatarCell: UITableViewCell {
-
-    private var tapHandler: (() -> Void)?
-
-    override init(style: UITableViewCell.CellStyle,
-                  reuseIdentifier: String?) {
-
+    override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
         super.init(style: .default, reuseIdentifier: reuseIdentifier)
-
         if let img = imageView {
             img.translatesAutoresizingMaskIntoConstraints = false
             img.contentMode = .scaleAspectFill
             img.layer.cornerRadius = 20
             img.clipsToBounds = true
-
-            NSLayoutConstraint.activate([
-                img.widthAnchor.constraint(equalToConstant: 40),
-                img.heightAnchor.constraint(equalToConstant: 40)
-            ])
+            NSLayoutConstraint.activate([ img.widthAnchor.constraint(equalToConstant: 40), img.heightAnchor.constraint(equalToConstant: 40) ])
         }
-
         textLabel?.font = .preferredFont(forTextStyle: .body)
         accessoryType = .disclosureIndicator
     }
-
-    required init?(coder: NSCoder) { fatalError() }
-
-    func configure(image: UIImage?,
-                   onTap: @escaping () -> Void) {
-
-        tapHandler = onTap
-
-        if let img = image {
-            imageView?.image = img
-            textLabel?.text = "Change photo"
-        } else {
-            imageView?.image = UIImage(systemName: "person.crop.circle.fill")
-            imageView?.tintColor = .systemGray3
-            textLabel?.text = "Upload profile photo"
-            textLabel?.textColor = .secondaryLabel
-        }
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    func configure(image: UIImage?, onTap: @escaping () -> Void) {
+        if let img = image { imageView?.image = img; textLabel?.text = "Change photo" }
+        else { imageView?.image = UIImage(systemName: "person.crop.circle.fill"); imageView?.tintColor = .systemGray3; textLabel?.text = "Upload profile photo"; textLabel?.textColor = .secondaryLabel }
     }
 }

@@ -347,8 +347,8 @@ final class AllMentorsViewController: UIViewController {
     // Keep a full source and a filtered view
     private var allMentors: [Mentor] = [
         Mentor(name: "Amit Sawi", role: "Senior Director", rating: 4.9),
-        Mentor(name: "Amit Sawi", role: "Actor", rating: 4.9),
-        Mentor(name: "Amit Sawi", role: "Dubbing Artist", rating: 4.9),
+        Mentor(name: "Sanya Mandal", role: "Actor", rating: 4.9),
+        Mentor(name: "Charlie Day", role: "Dubbing Artist", rating: 4.9),
         // add more mentors here as needed
     ]
 
