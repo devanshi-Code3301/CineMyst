@@ -264,7 +264,7 @@ extension HomeDashboardViewController: UITableViewDataSource, UITableViewDelegat
 }
 
 //
-// MARK: - CAMERA + GALLERY + INSTAGRAM POST FLOW
+// MARK: - CAMERA + GALLERY + 
 //
 extension HomeDashboardViewController: UIImagePickerControllerDelegate, UINavigationControllerDelegate, PHPickerViewControllerDelegate {
 
