@@ -14,90 +14,6 @@ fileprivate func makeShadow(on view: UIView, radius: CGFloat = 6, yOffset: CGFlo
     view.layer.masksToBounds = false
 }
 
-// Simple padding extension for UITextField used in search
-extension UITextField {
-    func setLeftPaddingPoints(_ amount: CGFloat) {
-        let padding = UIView(frame: CGRect(x: 0, y: 0, width: amount, height: 36))
-        leftView = padding
-        leftViewMode = .always
-    }
-}
-
-// MARK: - CategoryChipView
-final class CategoryChipView: UIControl {
-    private let iconView = UIImageView()
-    private let label = UILabel()
-    private let container = UIView()
-    var isSelectedChip: Bool = false {
-        didSet { updateAppearance() }
-    }
-    
-    init(icon: UIImage?, title: String) {
-        super.init(frame: .zero)
-        iconView.image = icon?.withRenderingMode(.alwaysTemplate)
-        iconView.contentMode = .scaleAspectFit
-        iconView.translatesAutoresizingMaskIntoConstraints = false
-        iconView.tintColor = .systemGray
-        
-        label.text = title
-        label.font = UIFont.systemFont(ofSize: 13, weight: .semibold)
-        label.translatesAutoresizingMaskIntoConstraints = false
-        
-        container.layer.cornerRadius = 18
-        container.layer.borderWidth = 1
-        container.layer.borderColor = UIColor.systemGray5.cgColor
-        container.backgroundColor = .clear
-        container.translatesAutoresizingMaskIntoConstraints = false
-        
-        container.addSubview(iconView)
-        container.addSubview(label)
-        addSubview(container)
-        translatesAutoresizingMaskIntoConstraints = false
-        
-        NSLayoutConstraint.activate([
-            container.topAnchor.constraint(equalTo: topAnchor),
-            container.bottomAnchor.constraint(equalTo: bottomAnchor),
-            container.leadingAnchor.constraint(equalTo: leadingAnchor),
-            container.trailingAnchor.constraint(equalTo: trailingAnchor),
-            
-            iconView.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 10),
-            iconView.centerYAnchor.constraint(equalTo: container.centerYAnchor),
-            iconView.widthAnchor.constraint(equalToConstant: 16),
-            iconView.heightAnchor.constraint(equalToConstant: 16),
-            
-            label.leadingAnchor.constraint(equalTo: iconView.trailingAnchor, constant: 8),
-            label.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -12),
-            label.centerYAnchor.constraint(equalTo: container.centerYAnchor),
-            container.heightAnchor.constraint(equalToConstant: 36)
-        ])
-        
-        updateAppearance()
-        addTarget(self, action: #selector(handleTap), for: .touchUpInside)
-    }
-    
-    @objc private func handleTap() {
-        sendActions(for: .primaryActionTriggered)
-    }
-    
-    private func updateAppearance() {
-        if isSelectedChip {
-            container.backgroundColor = .themePlum
-            label.textColor = .white
-            iconView.tintColor = .white
-            container.layer.borderColor = UIColor.clear.cgColor
-        } else {
-            container.backgroundColor = .white
-            label.textColor = .themePlum
-            iconView.tintColor = .systemGray
-            container.layer.borderColor = UIColor.systemGray4.cgColor
-        }
-    }
-    
-    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
-}
-
-
-
 // MARK: - JobsViewController
 final class jobsViewController: UIViewController, UIScrollViewDelegate {
     
@@ -108,6 +24,8 @@ final class jobsViewController: UIViewController, UIScrollViewDelegate {
     private let scrollView = UIScrollView()
     private let contentView = UIView()
     
+    // Search Controller
+    private let searchController = UISearchController(searchResultsController: nil)
     
     // Title bar
     private let titleLabel: UILabel = {
@@ -133,58 +51,15 @@ final class jobsViewController: UIViewController, UIScrollViewDelegate {
     }()
     private lazy var filterButton: UIButton = {
         let btn = UIButton(type: .system)
-        btn.setImage(UIImage(systemName: "slider.horizontal.3"), for: .normal)
+        btn.setImage(UIImage(systemName: "line.3.horizontal.decrease"), for: .normal)
         btn.translatesAutoresizingMaskIntoConstraints = false
         btn.widthAnchor.constraint(equalToConstant: 26).isActive = true
         btn.heightAnchor.constraint(equalToConstant: 26).isActive = true
         return btn
     }()
     
-    // Search
-    private let searchField: UITextField = {
-        let tf = UITextField()
-        tf.placeholder = "Search opportunities"
-        tf.translatesAutoresizingMaskIntoConstraints = false
-        tf.backgroundColor = UIColor.systemGray6
-        tf.layer.cornerRadius = 12
-        tf.layer.borderWidth = 0.6
-        tf.layer.borderColor = UIColor.systemGray4.cgColor
-        tf.clipsToBounds = true
-        tf.heightAnchor.constraint(equalToConstant: 44).isActive = true
-
-        // SF Symbol search icon on left
-        let icon = UIImageView(image: UIImage(systemName: "magnifyingglass"))
-        icon.tintColor = .systemGray2
-        icon.contentMode = .scaleAspectFit
-        icon.frame = CGRect(x: 0, y: 0, width: 34, height: 18)
-
-        let container = UIView(frame: CGRect(x: 0, y: 0, width: 38, height: 44))
-        icon.center = container.center
-        container.addSubview(icon)
-        tf.leftView = container
-        tf.leftViewMode = .always
-
-        // Clear button like native search bars
-        tf.clearButtonMode = .whileEditing
-
-        // Slight padding for text
-        tf.textColor = .label
-        tf.font = UIFont.systemFont(ofSize: 16)
-
-        return tf
-    }()
-
-    
-    // Categories (scrollable)
-    private let categoriesScroll = UIScrollView()
-    private let categoriesStack = UIStackView()
-    private var categoryChips: [CategoryChipView] = []
-    private let categoriesData: [(String, String)] = [
-        ("All", "chart.line.uptrend.xyaxis"),
-        ("Web Series", "tv"),
-        ("Feature Film", "film"),
-        ("Music Video", "music.note.list")
-    ]
+    // Search bar container
+    private let searchBarContainer = UIView()
     
     // Post buttons
     private let postButtonsStack: UIStackView = {
@@ -229,9 +104,10 @@ final class jobsViewController: UIViewController, UIScrollViewDelegate {
         view.backgroundColor = .systemBackground
         applyTheme()
         
+        setupSearchController()
         setupScrollView()
         setupTitleBar()
-        setupSearchAndCategories()
+        setupSearchBar()
         setupPostButtons()
         setupCuratedAndJobs()
         setupBottomSpacing()
@@ -244,14 +120,22 @@ final class jobsViewController: UIViewController, UIScrollViewDelegate {
     }
     
     private func applyTheme() {
-        
         titleLabel.textColor = themeColor
         curatedLabel.textColor = themeColor
-        bookmarkButton.tintColor = themeColor
-        filterButton.tintColor = themeColor
+        bookmarkButton.tintColor = .black
+        filterButton.tintColor = .black
     }
     
-    
+    // MARK: - Search Controller Setup
+    private func setupSearchController() {
+        searchController.searchResultsUpdater = self
+        searchController.obscuresBackgroundDuringPresentation = false
+        searchController.searchBar.placeholder = "Search opportunities"
+        searchController.searchBar.tintColor = themeColor
+        searchController.searchBar.searchBarStyle = .minimal
+        searchController.hidesNavigationBarDuringPresentation = false
+        definesPresentationContext = true
+    }
     
     // MARK: - ScrollView & Content
     private func setupScrollView() {
@@ -301,48 +185,25 @@ final class jobsViewController: UIViewController, UIScrollViewDelegate {
         ])
     }
     
-    // Search and category chips
-    private func setupSearchAndCategories() {
-        contentView.addSubview(searchField)
-        contentView.addSubview(categoriesScroll)
+    // Search bar below title
+    private func setupSearchBar() {
+        contentView.addSubview(searchBarContainer)
+        searchBarContainer.translatesAutoresizingMaskIntoConstraints = false
         
-        searchField.translatesAutoresizingMaskIntoConstraints = false
-        categoriesScroll.translatesAutoresizingMaskIntoConstraints = false
-        
-        categoriesScroll.showsHorizontalScrollIndicator = false
-        categoriesScroll.addSubview(categoriesStack)
-        
-        categoriesStack.axis = .horizontal
-        categoriesStack.spacing = 12
-        categoriesStack.translatesAutoresizingMaskIntoConstraints = false
+        // Add the search bar to the container
+        searchBarContainer.addSubview(searchController.searchBar)
+        searchController.searchBar.translatesAutoresizingMaskIntoConstraints = false
         
         NSLayoutConstraint.activate([
-            searchField.topAnchor.constraint(equalTo: subtitleLabel.bottomAnchor, constant: 16),
-            searchField.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
-            searchField.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
+            searchBarContainer.topAnchor.constraint(equalTo: subtitleLabel.bottomAnchor, constant: 16),
+            searchBarContainer.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 12),
+            searchBarContainer.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -12),
             
-            categoriesScroll.topAnchor.constraint(equalTo: searchField.bottomAnchor, constant: 16),
-            categoriesScroll.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 12),
-            categoriesScroll.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
-            categoriesScroll.heightAnchor.constraint(equalToConstant: 35),
-            
-            categoriesStack.topAnchor.constraint(equalTo: categoriesScroll.topAnchor),
-            categoriesStack.bottomAnchor.constraint(equalTo: categoriesScroll.bottomAnchor),
-            categoriesStack.leadingAnchor.constraint(equalTo: categoriesScroll.leadingAnchor, constant: 12),
-            categoriesStack.trailingAnchor.constraint(equalTo: categoriesScroll.trailingAnchor, constant: -12),
-            categoriesStack.heightAnchor.constraint(equalTo: categoriesScroll.heightAnchor)
+            searchController.searchBar.topAnchor.constraint(equalTo: searchBarContainer.topAnchor),
+            searchController.searchBar.leadingAnchor.constraint(equalTo: searchBarContainer.leadingAnchor),
+            searchController.searchBar.trailingAnchor.constraint(equalTo: searchBarContainer.trailingAnchor),
+            searchController.searchBar.bottomAnchor.constraint(equalTo: searchBarContainer.bottomAnchor)
         ])
-        
-        // Build chips
-        for (i, item) in categoriesData.enumerated() {
-            let icon = UIImage(systemName: item.1)
-            let chip = CategoryChipView(icon: icon, title: item.0)
-            chip.layer.cornerRadius = 16
-            chip.isSelectedChip = (i == 0) // "All" selected by default
-            chip.addTarget(self, action: #selector(categoryTapped(_:)), for: .primaryActionTriggered)
-            categoryChips.append(chip)
-            categoriesStack.addArrangedSubview(chip)
-        }
     }
     
     // Post buttons row
@@ -351,11 +212,10 @@ final class jobsViewController: UIViewController, UIScrollViewDelegate {
         postButtonsStack.translatesAutoresizingMaskIntoConstraints = false
         
         NSLayoutConstraint.activate([
-            postButtonsStack.topAnchor.constraint(equalTo: categoriesStack.bottomAnchor, constant: 18),
+            postButtonsStack.topAnchor.constraint(equalTo: searchBarContainer.bottomAnchor, constant: 18),
             postButtonsStack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
             postButtonsStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
-            postButtonsStack.heightAnchor.constraint(equalToConstant: 42),
-            postButtonsStack.widthAnchor.constraint(equalToConstant: 102)
+            postButtonsStack.heightAnchor.constraint(equalToConstant: 42)
         ])
         
         let titles = ["Post a job", "My Jobs", "Posted"]
@@ -363,13 +223,14 @@ final class jobsViewController: UIViewController, UIScrollViewDelegate {
             let btn = UIButton(type: .system)
             btn.setTitle(t, for: .normal)
             btn.titleLabel?.font = UIFont.systemFont(ofSize: 16, weight: .semibold)
+            btn.setTitleColor(.black, for: .normal)
             btn.layer.cornerRadius = 12
             btn.backgroundColor = .white
-            btn.setTitleColor(UIColor(red: 83/255, green: 26/255, blue: 87/255, alpha: 1), for: .normal)
+            
             btn.contentEdgeInsets = UIEdgeInsets(top: 16, left: 18, bottom: 16, right: 18)
             // shadow
             makeShadow(on: btn, radius: 6, yOffset: 4, opacity: 0.12)
-            btn.layer.borderWidth = 0.6
+            btn.layer.borderWidth = 0.3
             btn.layer.borderColor = UIColor.systemGray4.cgColor
             
             switch t {
@@ -391,14 +252,14 @@ final class jobsViewController: UIViewController, UIScrollViewDelegate {
         }
         
         NSLayoutConstraint.activate([
-            curatedLabel.topAnchor.constraint(equalTo: postButtonsStack.bottomAnchor, constant: 26),
+            curatedLabel.topAnchor.constraint(equalTo: postButtonsStack.bottomAnchor, constant: 34),
             curatedLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
             
             curatedSubtitle.topAnchor.constraint(equalTo: curatedLabel.bottomAnchor, constant: 6),
             curatedSubtitle.leadingAnchor.constraint(equalTo: curatedLabel.leadingAnchor),
             curatedSubtitle.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
             
-            jobListStack.topAnchor.constraint(equalTo: curatedSubtitle.bottomAnchor, constant: 16),
+            jobListStack.topAnchor.constraint(equalTo: curatedSubtitle.bottomAnchor, constant: 30),
             jobListStack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
             jobListStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
         ])
@@ -422,7 +283,7 @@ final class jobsViewController: UIViewController, UIScrollViewDelegate {
     // MARK: - Sample job cards (uses your JobCardView)
     private func addJobCards() {
         let jobs = [
-            ("Lead Actor - Drama Series “City of …”", "YRF Casting", "Mumbai, India", "₹ 5k/day", "2 days left", "Web Series"),
+            ("Lead Actor - Drama Series City of Dreams", "YRF Casting", "Mumbai, India", "₹ 5k/day", "2 days left", "Web Series"),
             ("Assistant Director - Feature Film", "Red Chillies Entertainment", "Delhi, India", "₹ 8k/day", "5 days left", "Feature Film"),
             ("Background Dancer", "T-Series", "Pune, India", "₹ 3k/day", "1 day left", "Music Video"),
             ("Camera Operator", "Balaji Motion Pictures", "Hyderabad, India", "₹ 6k/day", "3 days left", "Web Series")
@@ -454,11 +315,6 @@ final class jobsViewController: UIViewController, UIScrollViewDelegate {
     }
     
     // MARK: - Actions
-    @objc private func categoryTapped(_ sender: CategoryChipView) {
-        for chip in categoryChips { chip.isSelectedChip = (chip === sender) }
-        // TODO: filter list if required
-    }
-    
     @objc private func postJobTapped() {
         let vc = ProfileInfoViewController()
         navigationController?.pushViewController(vc, animated: true)
@@ -523,3 +379,11 @@ final class jobsViewController: UIViewController, UIScrollViewDelegate {
     }
 }
 
+// MARK: - UISearchResultsUpdating
+extension jobsViewController: UISearchResultsUpdating {
+    func updateSearchResults(for searchController: UISearchController) {
+        guard let searchText = searchController.searchBar.text else { return }
+        // TODO: Implement search filtering logic here
+        print("Searching for: \(searchText)")
+    }
+}

@@ -72,123 +72,126 @@ class JobCardView: UIView {
         backgroundColor = .white
         layer.cornerRadius = 16
         layer.shadowColor = UIColor.black.cgColor
-        layer.shadowOpacity = 0.08
-        layer.shadowRadius = 6
+        layer.shadowOpacity = 0.05
+        layer.shadowRadius = 4
         layer.shadowOffset = CGSize(width: 0, height: 3)
         
-        profileImageView.layer.cornerRadius = 22
+        // Image
+        profileImageView.layer.cornerRadius = 28
         profileImageView.layer.masksToBounds = true
         profileImageView.contentMode = .scaleAspectFill
         profileImageView.backgroundColor = .systemGray5
         profileImageView.translatesAutoresizingMaskIntoConstraints = false
         
-        titleLabel.font = UIFont.boldSystemFont(ofSize: 15)
+        // Title
+        titleLabel.font = UIFont.boldSystemFont(ofSize: 17)
         titleLabel.numberOfLines = 2
         
-        companyTagLabel.font = UIFont.systemFont(ofSize: 12, weight: .medium)
-        companyTagLabel.textColor = UIColor(red: 113/255, green: 30/255, blue: 96/255, alpha: 1)
-        companyTagLabel.textAlignment = .center
+        // Company label (simple text, no rounded tag box)
+        companyTagLabel.font = UIFont.systemFont(ofSize: 13)
+        companyTagLabel.textColor = .darkGray
         
-        companyTagContainer.backgroundColor = UIColor.systemGray6
-        companyTagContainer.layer.cornerRadius = 10
-        companyTagContainer.addSubview(companyTagLabel)
-        companyTagContainer.translatesAutoresizingMaskIntoConstraints = false
-        companyTagLabel.translatesAutoresizingMaskIntoConstraints = false
-        
-        NSLayoutConstraint.activate([
-            companyTagLabel.topAnchor.constraint(equalTo: companyTagContainer.topAnchor, constant: 4),
-            companyTagLabel.bottomAnchor.constraint(equalTo: companyTagContainer.bottomAnchor, constant: -4),
-            companyTagLabel.leadingAnchor.constraint(equalTo: companyTagContainer.leadingAnchor, constant: 10),
-            companyTagLabel.trailingAnchor.constraint(equalTo: companyTagContainer.trailingAnchor, constant: -10),
-            companyTagContainer.heightAnchor.constraint(equalToConstant: 26)
-        ])
-        
+        // Bookmark button - top right floating
         bookmarkButton.setImage(UIImage(systemName: "bookmark"), for: .normal)
-        bookmarkButton.tintColor = .black
+        bookmarkButton.tintColor = UIColor(red: 80/255, green: 25/255, blue: 60/255, alpha: 1)
+        bookmarkButton.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(bookmarkButton)
         bookmarkButton.addTarget(self, action: #selector(bookmarkTapped), for: .touchUpInside)
-
         
+        // Location + Salary row (clean, compact)
         locationIcon.tintColor = .gray
         clockIcon.tintColor = .gray
         
-        [locationIcon, clockIcon].forEach { $0.contentMode = .scaleAspectFit }
-        
         locationLabel.font = UIFont.systemFont(ofSize: 13)
         locationLabel.textColor = .darkGray
+        locationIcon.translatesAutoresizingMaskIntoConstraints = false
+        clockIcon.translatesAutoresizingMaskIntoConstraints = false
         
-        salaryLabel.font = UIFont.boldSystemFont(ofSize: 13)
+        salaryLabel.font = UIFont.boldSystemFont(ofSize: 14)
         salaryLabel.textColor = UIColor(red: 113/255, green: 30/255, blue: 96/255, alpha: 1)
         
         daysLeftLabel.font = UIFont.systemFont(ofSize: 13)
-        daysLeftLabel.textColor = .darkGray
+        daysLeftLabel.textColor = .gray
         
-        tagLabel.font = UIFont.systemFont(ofSize: 13)
+        tagLabel.font = UIFont.systemFont(ofSize: 12)
         tagLabel.textColor = .darkGray
         tagLabel.backgroundColor = UIColor.systemGray6
-        tagLabel.layer.cornerRadius = 12
+        tagLabel.layer.cornerRadius = 10
         tagLabel.clipsToBounds = true
         tagLabel.textAlignment = .center
         tagLabel.translatesAutoresizingMaskIntoConstraints = false
-        tagLabel.heightAnchor.constraint(equalToConstant: 24).isActive = true
+        tagLabel.heightAnchor.constraint(equalToConstant: 22).isActive = true
         
-        appliedLabel.font = UIFont.systemFont(ofSize: 13)
-        appliedLabel.textColor = .darkGray
-        appliedLabel.textAlignment = .right
+        appliedLabel.font = UIFont.systemFont(ofSize: 12)
+        appliedLabel.textColor = .gray
         
-        applyButton.setTitle("Apply Now", for: .normal)
+        // Apply button — compact style
+        applyButton.setTitle("Apply", for: .normal)
         applyButton.backgroundColor = UIColor(red: 47/255, green: 9/255, blue: 32/255, alpha: 1)
         applyButton.setTitleColor(.white, for: .normal)
-        applyButton.titleLabel?.font = UIFont.boldSystemFont(ofSize: 15)
-        applyButton.layer.cornerRadius = 10
-        
+        applyButton.titleLabel?.font = UIFont.boldSystemFont(ofSize: 14)
+        applyButton.layer.cornerRadius = 8
+        applyButton.heightAnchor.constraint(equalToConstant: 36).isActive = true
         applyButton.addTarget(self, action: #selector(applyTapped), for: .touchUpInside)
         
-       
-
+        // ---------- STACK LAYOUT ----------
         
-        let topRow = UIStackView(arrangedSubviews: [profileImageView, titleLabel, bookmarkButton])
-        topRow.axis = .horizontal
-        topRow.spacing = 10
-        topRow.alignment = .top
+        let titleStack = UIStackView(arrangedSubviews: [titleLabel, companyTagLabel])
+        titleStack.axis = .vertical
+        titleStack.spacing = 4
         
-        let companyRow = UIStackView(arrangedSubviews: [companyTagContainer])
-        companyRow.axis = .horizontal
-        companyRow.alignment = .leading
-        
-        let infoRow = UIStackView(arrangedSubviews: [
+        let salaryLocationRow = UIStackView(arrangedSubviews: [
             iconLabelStack(icon: locationIcon, label: locationLabel),
-            salaryLabel,
-            iconLabelStack(icon: clockIcon, label: daysLeftLabel)
+            salaryLabel
         ])
-        infoRow.axis = .horizontal
-        infoRow.distribution = .equalSpacing
-        infoRow.alignment = .center
+        salaryLocationRow.axis = .horizontal
+        salaryLocationRow.spacing = 10
+        salaryLocationRow.alignment = .center
         
-        let bottomRow = UIStackView(arrangedSubviews: [tagLabel, appliedLabel])
-        bottomRow.axis = .horizontal
-        bottomRow.distribution = .equalSpacing
-        bottomRow.alignment = .center
+        let tagAppliedRow = UIStackView(arrangedSubviews: [
+            tagLabel,
+            appliedLabel
+        ])
+        tagAppliedRow.axis = .horizontal
+        tagAppliedRow.distribution = .equalSpacing
         
-        let mainStack = UIStackView(arrangedSubviews: [topRow, companyRow, infoRow, bottomRow, applyButton])
+        let topRow = UIStackView(arrangedSubviews: [profileImageView, titleStack])
+        topRow.axis = .horizontal
+        topRow.spacing = 12
+        
+        let mainStack = UIStackView(arrangedSubviews: [
+            topRow,
+            salaryLocationRow,
+            tagAppliedRow,
+            applyButton
+        ])
         mainStack.axis = .vertical
-        mainStack.spacing = 8
+        mainStack.spacing = 12
         mainStack.translatesAutoresizingMaskIntoConstraints = false
+        
         addSubview(mainStack)
         
         NSLayoutConstraint.activate([
-            profileImageView.widthAnchor.constraint(equalToConstant: 44),
-            profileImageView.heightAnchor.constraint(equalToConstant: 44),
-            bookmarkButton.widthAnchor.constraint(equalToConstant: 24),
-            bookmarkButton.heightAnchor.constraint(equalToConstant: 24),
+                locationIcon.widthAnchor.constraint(equalToConstant: 14),
+                locationIcon.heightAnchor.constraint(equalToConstant: 14),
+                clockIcon.widthAnchor.constraint(equalToConstant: 14),
+                clockIcon.heightAnchor.constraint(equalToConstant: 14),
+                
+            profileImageView.widthAnchor.constraint(equalToConstant: 56),
+            profileImageView.heightAnchor.constraint(equalToConstant: 56),
             
             mainStack.topAnchor.constraint(equalTo: topAnchor, constant: 16),
             mainStack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
             mainStack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16),
             mainStack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -16),
             
-            applyButton.heightAnchor.constraint(equalToConstant: 38)
+            bookmarkButton.topAnchor.constraint(equalTo: topAnchor, constant: 10),
+            bookmarkButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
+            bookmarkButton.widthAnchor.constraint(equalToConstant: 24),
+            bookmarkButton.heightAnchor.constraint(equalToConstant: 24)
         ])
     }
+
     
     private func iconLabelStack(icon: UIImageView, label: UILabel) -> UIStackView {
         let stack = UIStackView(arrangedSubviews: [icon, label])
