@@ -2,16 +2,23 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>CFBundleURLName</key>
+			<string>cinemyst</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>cinemyst</string>
+			</array>
+		</dict>
+	</array>
 	<key>SUPABASE_HOST</key>
 	<string>$(SUPABASE_HOST)</string>
 	<key>SUPABASE_KEY</key>
 	<string>$(SUPABASE_KEY)</string>
-	<key>NSCameraUsageDescription</key>
-	<string>CineMyst needs access to your camera to capture stories and flicks.
-CineMyst needs access to your camera to capture stories and flicks.
-CineMyst needs to access your camera</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>CineMyst needs access to your photo library to select and share media</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

@@ -8,6 +8,7 @@
 import Foundation
 import Supabase
 import UIKit
+import SafariServices
 
 final class AuthManager {
     static let shared = AuthManager()
@@ -32,7 +33,9 @@ final class AuthManager {
     // MARK: - Passwordless / Magic Link (OTP)
     func signInWithMagicLink(email: String, redirectTo: URL? = nil) async throws {
         if let redirect = redirectTo {
-            try await client.auth.signInWithOTP(email: email, redirectTo: redirect)
+            let redirectURL = URL(string: "cinemyst://auth-callback")
+            try await client.auth.signInWithOTP(email: email, redirectTo: redirectURL)
+
         } else {
             try await client.auth.signInWithOTP(email: email)
         }
@@ -207,6 +210,8 @@ final class AuthManager {
         print("🎉 All profile data saved successfully!")
     }
     
+
+   
     // MARK: - Private Helper Methods
     private func saveArtistProfile(_ data: ProfileData, userId: UUID) async throws {
         let artistProfile = ArtistProfileRecordForSave(
@@ -344,6 +349,51 @@ struct ProfileRecord: Codable {
         case locationCity = "location_city"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
+    }
+}
+// AuthManager.swift — add/replace this extension
+// In AuthManager.swift - update the extension
+
+// AuthManager.swift - Replace the Google Sign-In extension
+
+// AuthManager.swift - Replace the Google Sign-In extension
+
+extension AuthManager {
+    func signInWithGoogle(from viewController: UIViewController) {
+        print("➡️ Starting Google Sign-In")
+        
+        Task {
+            do {
+                // Get the OAuth URL from Supabase
+                let url = try await client.auth.getOAuthSignInURL(
+                    provider: .google,
+                    redirectTo: URL(string: "cinemyst://auth-callback")
+                )
+                
+                print("🌐 Got OAuth URL: \(url)")
+                
+                // Open Safari on main thread
+                await MainActor.run {
+                    let safari = SFSafariViewController(url: url)
+                    safari.modalPresentationStyle = .overFullScreen
+                    viewController.present(safari, animated: true)
+                    print("✅ Safari presented")
+                }
+                
+            } catch {
+                print("❌ Error getting OAuth URL: \(error)")
+                await MainActor.run {
+                    // Show error to user
+                    let alert = UIAlertController(
+                        title: "Sign In Error",
+                        message: error.localizedDescription,
+                        preferredStyle: .alert
+                    )
+                    alert.addAction(UIAlertAction(title: "OK", style: .default))
+                    viewController.present(alert, animated: true)
+                }
+            }
+        }
     }
 }
 

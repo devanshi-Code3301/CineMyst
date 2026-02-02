@@ -13,7 +13,7 @@ class LoginViewController: UIViewController {
     @IBOutlet weak var emailTextField: UITextField!
     @IBOutlet weak var passwordTextField: UITextField!
     @IBOutlet weak var signInButton: UIButton!
-    
+
     private var activityIndicator: UIActivityIndicatorView!
     
     // MARK: - Gradient Layer
@@ -24,6 +24,8 @@ class LoginViewController: UIViewController {
         applyGradientBackground()
         setupUI()
         setupActivityIndicator()
+        
+        
     }
     
     override func viewDidLayoutSubviews() {
@@ -121,7 +123,8 @@ class LoginViewController: UIViewController {
     }
     
     @IBAction func googleLoginTapped(_ sender: UIButton) {
-        showAlert(message: "Google Sign In coming soon")
+        print("🔵 Google login button tapped")
+            AuthManager.shared.signInWithGoogle(from: self)
     }
     
     // MARK: - SUPABASE LOGIN (Updated with Profile Check)
@@ -130,37 +133,30 @@ class LoginViewController: UIViewController {
         disableUI()
 
         Task {
-            do {
-                // Sign in the user
-                let _ = try await supabase.auth.signIn(
-                    email: email,
-                    password: password
-                )
-                
-                // Check if user has completed their profile
-                let hasProfile = try await checkUserProfile()
-
-                await MainActor.run {
-                    showLoading(false)
-                    enableUI()
-                    
-                    if hasProfile {
-                        // Profile exists - go to main app
-                        navigateToHome()
-                    } else {
-                        // Profile doesn't exist - go to onboarding
-                        navigateToOnboarding()
-                    }
-                }
-            } catch {
-                await MainActor.run {
-                    showLoading(false)
-                    enableUI()
-                    handleAuthError(error)
-                }
-            }
-        }
-    }
+               do {
+                   try await supabase.auth.signIn(email: email, password: password)
+                   
+                   let hasProfile = try await checkUserProfile()
+                   
+                   await MainActor.run {
+                       showLoading(false)
+                       enableUI()
+                       
+                       if hasProfile {
+                           
+                       } else {
+                           navigateToOnboarding()
+                       }
+                   }
+               } catch {
+                   await MainActor.run {
+                       showLoading(false)
+                       enableUI()
+                       handleAuthError(error)
+                   }
+               }
+           }
+       }
     
     // MARK: - Profile Check
     private func checkUserProfile() async throws -> Bool {
@@ -235,12 +231,7 @@ class LoginViewController: UIViewController {
         }
     }
 
-    // MARK: - NAVIGATION
-    private func navigateToHome() {
-        let tabBarVC = CineMystTabBarController()
-        tabBarVC.modalPresentationStyle = .fullScreen
-        present(tabBarVC, animated: true)
-    }
+
     
     private func navigateToOnboarding() {
         // Create onboarding coordinator
@@ -288,6 +279,9 @@ class LoginViewController: UIViewController {
         alert.addAction(UIAlertAction(title: "OK", style: .default))
         present(alert, animated: true)
     }
+   
+
+
 }
 
 // MARK: - TEXTFIELD DELEGATE

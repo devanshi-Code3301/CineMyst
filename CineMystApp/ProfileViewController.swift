@@ -13,6 +13,9 @@ final class ProfileViewController: UIViewController {
     private let scrollView = UIScrollView()
     private let contentView = UIView()
     private let loadingIndicator = UIActivityIndicatorView(style: .large)
+    
+    // ✅ Add Button (Portfolio Management)
+    private let addButton = UIButton()
 
     private let coverLabel = UILabel()
     private let profileImageView = UIImageView()
@@ -40,6 +43,7 @@ final class ProfileViewController: UIViewController {
     
     // MARK: - Profile Data
     private var userProfile: UserProfileData?
+    private var hasPortfolio = false // ✅ Track portfolio state
 
     // MARK: - Init
     init() {
@@ -64,6 +68,7 @@ final class ProfileViewController: UIViewController {
         setupNavigationBar()
         setupScrollView()
         setupUI()
+        setupAddButton()
         layoutUI()
         
         fetchProfileData()
@@ -142,14 +147,14 @@ final class ProfileViewController: UIViewController {
         connectButton.layer.cornerRadius = 10
         connectButton.titleLabel?.font = .systemFont(ofSize: 15, weight: .semibold)
 
-        portfolioButton.setTitle("View Portfolio", for: .normal)
+        portfolioButton.setTitle("Loading...", for: .normal)
         portfolioButton.backgroundColor = UIColor(named: "AccentColor") ?? UIColor(red: 0.3, green: 0.1, blue: 0.2, alpha: 1.0)
         portfolioButton.setTitleColor(.white, for: .normal)
         portfolioButton.layer.cornerRadius = 10
         portfolioButton.layer.shadowOpacity = 0.2
         portfolioButton.layer.shadowRadius = 2
         portfolioButton.layer.shadowOffset = CGSize(width: 0, height: 2)
-        portfolioButton.addTarget(self, action: #selector(openPortfolio), for: .touchUpInside)
+        portfolioButton.addTarget(self, action: #selector(portfolioButtonTapped), for: .touchUpInside)
 
         aboutTitle.text = "About"
         aboutTitle.font = .systemFont(ofSize: 17, weight: .semibold)
@@ -184,6 +189,26 @@ final class ProfileViewController: UIViewController {
             $0.translatesAutoresizingMaskIntoConstraints = false
             contentView.addSubview($0)
         }
+    }
+    
+    // MARK: - Setup Add Button (Portfolio Actions Only)
+    private func setupAddButton() {
+        addButton.setImage(UIImage(systemName: "plus.circle.fill"), for: .normal)
+        addButton.tintColor = .label
+        addButton.contentVerticalAlignment = .fill
+        addButton.contentHorizontalAlignment = .fill
+        addButton.translatesAutoresizingMaskIntoConstraints = false
+        addButton.addTarget(self, action: #selector(addButtonTapped), for: .touchUpInside)
+        addButton.isHidden = true // ✅ Hidden initially until portfolio exists
+        
+        view.addSubview(addButton)
+        
+        NSLayoutConstraint.activate([
+            addButton.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 16),
+            addButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+            addButton.widthAnchor.constraint(equalToConstant: 28),
+            addButton.heightAnchor.constraint(equalToConstant: 28)
+        ])
     }
 
     // MARK: - Layout
@@ -275,14 +300,12 @@ final class ProfileViewController: UIViewController {
                 let userId = session.user.id
                 print("👤 User ID: \(userId)")
                 
-                // ✅ FIX: Decode as ARRAY first, then get first element
                 let profileResponse = try await supabase
                     .from("profiles")
                     .select()
                     .eq("id", value: userId.uuidString)
                     .execute()
                 
-                // Decode as array
                 let profileArray = try JSONDecoder().decode([ProfileRecord].self, from: profileResponse.data)
                 
                 guard let profile = profileArray.first else {
@@ -293,7 +316,6 @@ final class ProfileViewController: UIViewController {
                 print("   Username: \(profile.username ?? "nil")")
                 print("   Full Name: \(profile.fullName ?? "nil")")
                 
-                // Fetch role-specific data
                 var artistProfile: ArtistProfileRecord?
                 var castingProfile: CastingProfileRecord?
                 
@@ -305,7 +327,6 @@ final class ProfileViewController: UIViewController {
                             .eq("id", value: userId.uuidString)
                             .execute()
                         
-                        // Decode as array
                         let artistArray = try JSONDecoder().decode([ArtistProfileRecord].self, from: artistResponse.data)
                         artistProfile = artistArray.first
                         print("✅ Artist profile fetched")
@@ -320,7 +341,6 @@ final class ProfileViewController: UIViewController {
                             .eq("id", value: userId.uuidString)
                             .execute()
                         
-                        // Decode as array
                         let castingArray = try JSONDecoder().decode([CastingProfileRecord].self, from: castingResponse.data)
                         castingProfile = castingArray.first
                         print("✅ Casting profile fetched")
@@ -339,6 +359,10 @@ final class ProfileViewController: UIViewController {
                 await MainActor.run {
                     self.userProfile = userData
                     self.updateUI(with: userData)
+                    
+                    // ✅ Check portfolio status and update buttons
+                    self.checkAndUpdatePortfolioButton(userId: userId.uuidString)
+                    
                     self.loadingIndicator.stopAnimating()
                     
                     UIView.animate(withDuration: 0.3) {
@@ -357,7 +381,6 @@ final class ProfileViewController: UIViewController {
         }
     }
 
-    
     // MARK: - Update UI with Profile Data
     private func updateUI(with data: UserProfileData) {
         print("🎨 Updating UI with profile data")
@@ -432,6 +455,48 @@ final class ProfileViewController: UIViewController {
         print("✅ UI updated successfully")
     }
     
+    // MARK: - ✅ Check Portfolio Status and Update Button
+    private func checkAndUpdatePortfolioButton(userId: String) {
+        Task {
+            do {
+                let portfolioResponse = try await supabase
+                    .from("portfolios")
+                    .select()
+                    .eq("user_id", value: userId)
+                    .eq("is_primary", value: true)
+                    .execute()
+                
+                struct PortfolioCheck: Codable { let id: String }
+                let portfolios = try JSONDecoder().decode([PortfolioCheck].self, from: portfolioResponse.data)
+                
+                await MainActor.run {
+                    self.hasPortfolio = !portfolios.isEmpty
+                    
+                    if self.hasPortfolio {
+                        // ✅ Portfolio exists
+                        self.portfolioButton.setTitle("View Portfolio", for: .normal)
+                        self.portfolioButton.backgroundColor = UIColor(named: "AccentColor") ?? UIColor(red: 0.3, green: 0.1, blue: 0.2, alpha: 1.0)
+                        self.addButton.isHidden = false // Show + button
+                        print("✅ Portfolio exists - showing View Portfolio + Add button")
+                    } else {
+                        // ⚠️ No portfolio
+                        self.portfolioButton.setTitle("Create Portfolio", for: .normal)
+                        self.portfolioButton.backgroundColor = .systemGreen
+                        self.addButton.isHidden = true // Hide + button
+                        print("⚠️ No portfolio - showing Create Portfolio")
+                    }
+                }
+                
+            } catch {
+                print("⚠️ Could not check portfolio status: \(error)")
+                await MainActor.run {
+                    self.portfolioButton.setTitle("Create Portfolio", for: .normal)
+                    self.addButton.isHidden = true
+                }
+            }
+        }
+    }
+    
     // MARK: - Load Profile Image
     private func loadProfileImage(from url: URL) {
         Task {
@@ -459,12 +524,78 @@ final class ProfileViewController: UIViewController {
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
         present(alert, animated: true)
     }
+    
+    private func showSuccess(message: String) {
+        let alert = UIAlertController(title: "Success", message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
+    }
 
-    // MARK: - Navigation
-    @objc private func openPortfolio() {
+    // MARK: - Portfolio Actions
+    
+    // ✅ + Button: Opens creation form (same as main button when no portfolio)
+    @objc private func addButtonTapped() {
+        guard userProfile?.profile.id != nil else {
+            showError(message: "User profile not loaded")
+            return
+        }
+        
+        print("+ Button: Opening portfolio creation form")
+        openPortfolioCreationForm()
+    }
+
+    // ✅ Main Portfolio Button: Smart - Create or View based on state
+    @objc private func portfolioButtonTapped() {
+        guard let userId = userProfile?.profile.id else {
+            showError(message: "User profile not loaded")
+            return
+        }
+        
+        if hasPortfolio {
+            // Portfolio exists → View it
+            print("📖 Opening portfolio viewer")
+            openPortfolioViewer(isOwnProfile: true)
+        } else {
+            // No portfolio → Create it
+            print("📝 Opening portfolio creation form")
+            openPortfolioCreationForm()
+        }
+    }
+
+    private func openPortfolioViewer(isOwnProfile: Bool) {
         let portfolioVC = PortfolioViewController()
+        portfolioVC.isOwnProfile = isOwnProfile
         portfolioVC.hidesBottomBarWhenPushed = true
         navigationController?.pushViewController(portfolioVC, animated: true)
+    }
+
+    private func openPortfolioCreationForm() {
+        let creationVC = PortfolioCreationViewController()
+        let navController = UINavigationController(rootViewController: creationVC)
+        navController.modalPresentationStyle = .pageSheet
+        
+        // ✅ Listen for portfolio creation
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(portfolioWasCreated),
+            name: .portfolioCreated,
+            object: nil
+        )
+        
+        present(navController, animated: true)
+    }
+
+    @objc private func portfolioWasCreated() {
+        // ✅ Refresh to update button states
+        guard let userId = userProfile?.profile.id else { return }
+        checkAndUpdatePortfolioButton(userId: userId)
+        
+        // Show success message
+        showSuccess(message: "Portfolio created! You can now add your work.")
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
 }
 

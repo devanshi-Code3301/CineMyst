@@ -2,177 +2,652 @@
 //  PortfolioViewController.swift
 //  CineMystApp
 //
-//  Created by Devanshi on 11/11/25.
+//  Created by user@50 on 23/01/26.
 //
 
 import UIKit
 
-final class PortfolioViewController: UIViewController {
-
-    private var collectionView: UICollectionView!
-
-    // MARK: - Back Button
-    private let backButton: UIButton = {
-        let btn = UIButton(type: .system)
-        btn.setImage(UIImage(systemName: "chevron.left"), for: .normal)
-        btn.tintColor = .white
-        btn.backgroundColor = UIColor(white: 0.15, alpha: 1)
-        btn.layer.cornerRadius = 18
-        btn.translatesAutoresizingMaskIntoConstraints = false
-        return btn
-    }()
-
-    // MARK: - Dummy Data
-    private let portfolioData = PortfolioData(
-        name: "Nitanshi Goel",
-        role: "TV, Film, Theater Actress",
-        about: """
-        • IFA Award for Best Actress in Cadillac Label (2020)
-        • Festival Award for Best Female Debut (2021)
-        • Nominated for Teen Actress of the Year (2021)
-        • Performed on the "Star Academy" of Star Plus in 2020
-        • Performed at Miss India (2019), Main Kahani Hoon
-        """,
-        achievements: [],
-        workshops: [
-            Workshop(title: "Performing Arts Academy", type: "Drama and Theater Arts", location: "City, New York", duration: "Jan 2020 - July 2022"),
-            Workshop(title: "Advanced Acting Workshop", type: "Drama and Theater Arts", location: "City, Mumbai", duration: "May 2019 - Jan 2020"),
-            Workshop(title: "The Globe Theatre, Mumbai", type: "Shakespeare (2019), Titus Andronicus, Shakespeare (2016), Actor/Drama", location: "", duration: ""),
-            Workshop(title: "Monkey Theatre Company, Mumbai", type: "A Mughal by Chance (2020), Heer, Love between Heer-Ranjha (Punjabi), Shakespeare (2017), Actor/Drama", location: "", duration: "")
-        ],
-        films: [
-            Film(title: "Veer-Zaara", year: "2023", role: "Susan Cooper", duration: "20 MIN", production: "Paramount Pictures", imageName: "veerzaara"),
-            Film(title: "Dust and Honor", year: "2024", role: "Susan Cooper - Yashoera", duration: "10 MIN", production: "Paramount Pictures", imageName: "dustandhonor")
-        ]
-    )
-
-    // MARK: - Gallery Images
-    private let galleryImages = ["rani1", "rani2", "rani3", "rani4", "rani5", "rani6"]
-
+class PortfolioViewController: UIViewController {
+    
+    // MARK: - Properties
+    var isOwnProfile = false
+    private var portfolioData: ActorPortfolioData?
+    
+    // MARK: - UI Components
+    private let scrollView = UIScrollView()
+    private let contentView = UIView()
+    private let loadingIndicator = UIActivityIndicatorView(style: .large)
+    
+    // Header
+    private let profileImageView = UIImageView()
+    private let nameLabel = UILabel()
+    private let bioLabel = UILabel()
+    private let contactEmailLabel = UILabel()
+    private let socialLinksStack = UIStackView()
+    
+    // Edit button (only for own profile)
+    private let editButton = UIButton(type: .system)
+    
+    // Section containers
+    private let filmsContainer = UIView()
+    private let theatreContainer = UIView()
+    private let workshopsContainer = UIView()
+    
     // MARK: - Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
-        setupView()
-        setupCollectionView()
+        view.backgroundColor = .systemBackground
+        title = "Portfolio"
+        
+        setupNavigationBar()
+        setupScrollView()
+        setupUI()
+        layoutUI()
+        
+        fetchPortfolioData()
     }
-
-    override func viewWillAppear(_ animated: Bool) {
-        super.viewWillAppear(animated)
-        navigationController?.navigationBar.isHidden = true
+    
+    // MARK: - Setup
+    private func setupNavigationBar() {
+        navigationItem.backButtonTitle = ""
+        
+        if isOwnProfile {
+            let editNavButton = UIBarButtonItem(
+                image: UIImage(systemName: "pencil.circle"),
+                style: .plain,
+                target: self,
+                action: #selector(editBasicInfo)
+            )
+            navigationItem.rightBarButtonItem = editNavButton
+        }
     }
-
-    // ⭐ FIX HERE — Unhide navigation bar when leaving Portfolio
-    override func viewWillDisappear(_ animated: Bool) {
-        super.viewWillDisappear(animated)
-        navigationController?.navigationBar.isHidden = false
-    }
-
-    override var preferredStatusBarStyle: UIStatusBarStyle {
-        return .lightContent
-    }
-
-    // MARK: - UI Setup
-    private func setupView() {
-        view.backgroundColor = .black
-
-        // Add Back Button
-        view.addSubview(backButton)
-        backButton.addTarget(self, action: #selector(handleBack), for: .touchUpInside)
-
+    
+    private func setupScrollView() {
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        contentView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(scrollView)
+        scrollView.addSubview(contentView)
+        
         NSLayoutConstraint.activate([
-            backButton.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 10),
-            backButton.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
-            backButton.widthAnchor.constraint(equalToConstant: 36),
-            backButton.heightAnchor.constraint(equalToConstant: 36),
+            scrollView.topAnchor.constraint(equalTo: view.topAnchor),
+            scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            
+            contentView.topAnchor.constraint(equalTo: scrollView.topAnchor),
+            contentView.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor),
+            contentView.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor),
+            contentView.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor),
+            contentView.widthAnchor.constraint(equalTo: scrollView.widthAnchor)
         ])
     }
-
-    @objc private func handleBack() {
-        navigationController?.popViewController(animated: true)
+    
+    private func setupUI() {
+        loadingIndicator.translatesAutoresizingMaskIntoConstraints = false
+        loadingIndicator.hidesWhenStopped = true
+        view.addSubview(loadingIndicator)
+        
+        // Profile Image
+        profileImageView.image = UIImage(systemName: "person.circle.fill")
+        profileImageView.tintColor = .systemGray3
+        profileImageView.contentMode = .scaleAspectFill
+        profileImageView.clipsToBounds = true
+        profileImageView.layer.cornerRadius = 60
+        profileImageView.layer.borderWidth = 3
+        profileImageView.layer.borderColor = UIColor.systemGray5.cgColor
+        profileImageView.translatesAutoresizingMaskIntoConstraints = false
+        
+        // Name
+        nameLabel.font = .systemFont(ofSize: 28, weight: .bold)
+        nameLabel.textAlignment = .center
+        nameLabel.numberOfLines = 0
+        nameLabel.translatesAutoresizingMaskIntoConstraints = false
+        
+        // Bio
+        bioLabel.font = .systemFont(ofSize: 15)
+        bioLabel.textColor = .secondaryLabel
+        bioLabel.textAlignment = .center
+        bioLabel.numberOfLines = 0
+        bioLabel.translatesAutoresizingMaskIntoConstraints = false
+        
+        // Contact Email
+        contactEmailLabel.font = .systemFont(ofSize: 14)
+        contactEmailLabel.textColor = .secondaryLabel
+        contactEmailLabel.textAlignment = .center
+        contactEmailLabel.translatesAutoresizingMaskIntoConstraints = false
+        
+        // Social Links Stack
+        socialLinksStack.axis = .horizontal
+        socialLinksStack.spacing = 16
+        socialLinksStack.distribution = .fillEqually
+        socialLinksStack.translatesAutoresizingMaskIntoConstraints = false
+        
+        // Section Containers
+        [filmsContainer, theatreContainer, workshopsContainer].forEach {
+            $0.translatesAutoresizingMaskIntoConstraints = false
+        }
+        
+        [profileImageView, nameLabel, bioLabel, contactEmailLabel, socialLinksStack,
+         filmsContainer, theatreContainer, workshopsContainer].forEach {
+            contentView.addSubview($0)
+        }
     }
-
-    // MARK: - CollectionView Setup
-    private func setupCollectionView() {
-        let layout = UICollectionViewCompositionalLayout { section, _ -> NSCollectionLayoutSection? in
-            switch section {
-            case 0: return PortfolioLayout.headerSection()
-            case 1: return PortfolioLayout.workshopsSection()
-            case 2: return PortfolioLayout.filmSection()
-            case 3: return PortfolioLayout.gallerySection()
-            default: return nil
+    
+    private func layoutUI() {
+        NSLayoutConstraint.activate([
+            loadingIndicator.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            loadingIndicator.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+            
+            profileImageView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 24),
+            profileImageView.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+            profileImageView.widthAnchor.constraint(equalToConstant: 120),
+            profileImageView.heightAnchor.constraint(equalToConstant: 120),
+            
+            nameLabel.topAnchor.constraint(equalTo: profileImageView.bottomAnchor, constant: 16),
+            nameLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
+            nameLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
+            
+            bioLabel.topAnchor.constraint(equalTo: nameLabel.bottomAnchor, constant: 12),
+            bioLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
+            bioLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
+            
+            contactEmailLabel.topAnchor.constraint(equalTo: bioLabel.bottomAnchor, constant: 8),
+            contactEmailLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
+            contactEmailLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
+            
+            socialLinksStack.topAnchor.constraint(equalTo: contactEmailLabel.bottomAnchor, constant: 20),
+            socialLinksStack.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+            socialLinksStack.heightAnchor.constraint(equalToConstant: 44),
+            
+            filmsContainer.topAnchor.constraint(equalTo: socialLinksStack.bottomAnchor, constant: 32),
+            filmsContainer.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            filmsContainer.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+            
+            theatreContainer.topAnchor.constraint(equalTo: filmsContainer.bottomAnchor, constant: 24),
+            theatreContainer.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            theatreContainer.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+            
+            workshopsContainer.topAnchor.constraint(equalTo: theatreContainer.bottomAnchor, constant: 24),
+            workshopsContainer.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            workshopsContainer.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+            workshopsContainer.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -40)
+        ])
+    }
+    
+    // MARK: - Fetch Portfolio Data
+    private func fetchPortfolioData() {
+        loadingIndicator.startAnimating()
+        
+        Task {
+            do {
+                guard let session = try await AuthManager.shared.currentSession() else {
+                    throw NSError(domain: "Auth", code: 401)
+                }
+                
+                let userId = session.user.id.uuidString
+                
+                // Fetch portfolio
+                let portfolioResponse = try await supabase
+                    .from("portfolios")
+                    .select()
+                    .eq("user_id", value: userId)
+                    .eq("is_primary", value: true)
+                    .execute()
+                
+                let portfolios = try JSONDecoder().decode([ActorPortfolio].self, from: portfolioResponse.data)
+                
+                guard let portfolio = portfolios.first else {
+                    throw NSError(domain: "Portfolio", code: 404, userInfo: [NSLocalizedDescriptionKey: "Portfolio not found"])
+                }
+                
+                // Fetch portfolio items (films, theatre, workshops)
+                // For now, start with empty arrays
+                let data = ActorPortfolioData(
+                    portfolio: portfolio,
+                    films: [],
+                    theatreProductions: [],
+                    workshops: []
+                )
+                
+                await MainActor.run {
+                    self.portfolioData = data
+                    self.updateUI(with: data)
+                    self.loadingIndicator.stopAnimating()
+                }
+                
+            } catch {
+                print("❌ Error fetching portfolio: \(error)")
+                await MainActor.run {
+                    self.loadingIndicator.stopAnimating()
+                    self.showError(message: "Failed to load portfolio: \(error.localizedDescription)")
+                }
             }
         }
-
-        collectionView = UICollectionView(frame: view.bounds, collectionViewLayout: layout)
-        collectionView.backgroundColor = .black
-        collectionView.dataSource = self
-        collectionView.delegate = self
-        collectionView.alwaysBounceVertical = true
-        collectionView.showsVerticalScrollIndicator = false
-
-        // Register cells
-        collectionView.register(PortfolioHeaderCell.self, forCellWithReuseIdentifier: PortfolioHeaderCell.reuseId)
-        collectionView.register(WorkshopCell.self, forCellWithReuseIdentifier: WorkshopCell.reuseId)
-        collectionView.register(FilmCell.self, forCellWithReuseIdentifier: FilmCell.reuseId)
-        collectionView.register(GalleryCell.self, forCellWithReuseIdentifier: GalleryCell.reuseId)
-
-        view.addSubview(collectionView)
-        view.bringSubviewToFront(backButton)  // keep button on top
+    }
+    
+    // MARK: - Update UI
+    private func updateUI(with data: ActorPortfolioData) {
+        // Update header
+        nameLabel.text = data.portfolio.stageName ?? "Portfolio"
+        bioLabel.text = data.portfolio.bio
+        contactEmailLabel.text = "📧 \(data.portfolio.contactEmail)"
+        
+        // Load profile image if exists
+        if let profilePicUrl = data.portfolio.profilePictureUrl,
+           let url = URL(string: profilePicUrl) {
+            loadImage(from: url, into: profileImageView)
+        }
+        
+        // Setup social links
+        setupSocialLinks(data: data)
+        
+        // Setup sections
+        setupFilmsSection(films: data.films)
+        setupTheatreSection(productions: data.theatreProductions)
+        setupWorkshopsSection(workshops: data.workshops)
+    }
+    
+    private func setupSocialLinks(data: ActorPortfolioData) {
+        socialLinksStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        
+        var hasLinks = false
+        
+        if let instagram = data.portfolio.instagramUrl, !instagram.isEmpty {
+            let button = createSocialButton(icon: "📱", title: "Instagram", url: instagram)
+            socialLinksStack.addArrangedSubview(button)
+            hasLinks = true
+        }
+        
+        if let youtube = data.portfolio.youtubeUrl, !youtube.isEmpty {
+            let button = createSocialButton(icon: "📺", title: "YouTube", url: youtube)
+            socialLinksStack.addArrangedSubview(button)
+            hasLinks = true
+        }
+        
+        if let imdb = data.portfolio.imdbUrl, !imdb.isEmpty {
+            let button = createSocialButton(icon: "🎬", title: "IMDb", url: imdb)
+            socialLinksStack.addArrangedSubview(button)
+            hasLinks = true
+        }
+        
+        socialLinksStack.isHidden = !hasLinks
+    }
+    
+    private func createSocialButton(icon: String, title: String, url: String) -> UIButton {
+        let button = UIButton(type: .system)
+        button.setTitle("\(icon) \(title)", for: .normal)
+        button.backgroundColor = .systemGray6
+        button.setTitleColor(.label, for: .normal)
+        button.titleLabel?.font = .systemFont(ofSize: 13, weight: .medium)
+        button.layer.cornerRadius = 8
+        button.addAction(UIAction { [weak self] _ in
+            self?.openURL(url)
+        }, for: .touchUpInside)
+        return button
+    }
+    
+    // MARK: - Setup Sections
+    private func setupFilmsSection(films: [ActorPortfolioWorkItem]) {
+        filmsContainer.subviews.forEach { $0.removeFromSuperview() }
+        
+        let headerView = createSectionHeader(
+            title: "🎬 Films & TV",
+            action: isOwnProfile ? #selector(addFilm) : nil
+        )
+        filmsContainer.addSubview(headerView)
+        
+        headerView.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            headerView.topAnchor.constraint(equalTo: filmsContainer.topAnchor),
+            headerView.leadingAnchor.constraint(equalTo: filmsContainer.leadingAnchor, constant: 20),
+            headerView.trailingAnchor.constraint(equalTo: filmsContainer.trailingAnchor, constant: -20)
+        ])
+        
+        if films.isEmpty {
+            // Show empty state
+            let emptyView = createEmptyStateView(
+                icon: "🎬",
+                title: "No Films Yet",
+                subtitle: isOwnProfile ? "Add your film work to showcase your talent" : "No films added yet",
+                buttonTitle: isOwnProfile ? "Add Your First Film" : nil,
+                action: isOwnProfile ? #selector(addFilm) : nil
+            )
+            filmsContainer.addSubview(emptyView)
+            
+            emptyView.translatesAutoresizingMaskIntoConstraints = false
+            NSLayoutConstraint.activate([
+                emptyView.topAnchor.constraint(equalTo: headerView.bottomAnchor, constant: 16),
+                emptyView.leadingAnchor.constraint(equalTo: filmsContainer.leadingAnchor, constant: 20),
+                emptyView.trailingAnchor.constraint(equalTo: filmsContainer.trailingAnchor, constant: -20),
+                emptyView.bottomAnchor.constraint(equalTo: filmsContainer.bottomAnchor)
+            ])
+        } else {
+            // TODO: Show actual film items
+            let label = UILabel()
+            label.text = "\(films.count) films"
+            label.font = .systemFont(ofSize: 14)
+            label.textColor = .secondaryLabel
+            label.translatesAutoresizingMaskIntoConstraints = false
+            filmsContainer.addSubview(label)
+            
+            NSLayoutConstraint.activate([
+                label.topAnchor.constraint(equalTo: headerView.bottomAnchor, constant: 16),
+                label.leadingAnchor.constraint(equalTo: filmsContainer.leadingAnchor, constant: 20),
+                label.bottomAnchor.constraint(equalTo: filmsContainer.bottomAnchor)
+            ])
+        }
+    }
+    
+    private func setupTheatreSection(productions: [ActorPortfolioWorkItem]) {
+        theatreContainer.subviews.forEach { $0.removeFromSuperview() }
+        
+        let headerView = createSectionHeader(
+            title: "🎭 Theatre",
+            action: isOwnProfile ? #selector(addTheatre) : nil
+        )
+        theatreContainer.addSubview(headerView)
+        
+        headerView.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            headerView.topAnchor.constraint(equalTo: theatreContainer.topAnchor),
+            headerView.leadingAnchor.constraint(equalTo: theatreContainer.leadingAnchor, constant: 20),
+            headerView.trailingAnchor.constraint(equalTo: theatreContainer.trailingAnchor, constant: -20)
+        ])
+        
+        if productions.isEmpty {
+            let emptyView = createEmptyStateView(
+                icon: "🎭",
+                title: "No Theatre Work Yet",
+                subtitle: isOwnProfile ? "Share your stage experience" : "No theatre productions added yet",
+                buttonTitle: isOwnProfile ? "Add Theatre Production" : nil,
+                action: isOwnProfile ? #selector(addTheatre) : nil
+            )
+            theatreContainer.addSubview(emptyView)
+            
+            emptyView.translatesAutoresizingMaskIntoConstraints = false
+            NSLayoutConstraint.activate([
+                emptyView.topAnchor.constraint(equalTo: headerView.bottomAnchor, constant: 16),
+                emptyView.leadingAnchor.constraint(equalTo: theatreContainer.leadingAnchor, constant: 20),
+                emptyView.trailingAnchor.constraint(equalTo: theatreContainer.trailingAnchor, constant: -20),
+                emptyView.bottomAnchor.constraint(equalTo: theatreContainer.bottomAnchor)
+            ])
+        }
+    }
+    
+    private func setupWorkshopsSection(workshops: [ActorPortfolioWorkItem]) {
+        workshopsContainer.subviews.forEach { $0.removeFromSuperview() }
+        
+        let headerView = createSectionHeader(
+            title: "📚 Training & Workshops",
+            action: isOwnProfile ? #selector(addWorkshop) : nil
+        )
+        workshopsContainer.addSubview(headerView)
+        
+        headerView.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            headerView.topAnchor.constraint(equalTo: workshopsContainer.topAnchor),
+            headerView.leadingAnchor.constraint(equalTo: workshopsContainer.leadingAnchor, constant: 20),
+            headerView.trailingAnchor.constraint(equalTo: workshopsContainer.trailingAnchor, constant: -20)
+        ])
+        
+        if workshops.isEmpty {
+            let emptyView = createEmptyStateView(
+                icon: "📚",
+                title: "No Training Yet",
+                subtitle: isOwnProfile ? "List your workshops and courses" : "No training added yet",
+                buttonTitle: isOwnProfile ? "Add Training/Workshop" : nil,
+                action: isOwnProfile ? #selector(addWorkshop) : nil
+            )
+            workshopsContainer.addSubview(emptyView)
+            
+            emptyView.translatesAutoresizingMaskIntoConstraints = false
+            NSLayoutConstraint.activate([
+                emptyView.topAnchor.constraint(equalTo: headerView.bottomAnchor, constant: 16),
+                emptyView.leadingAnchor.constraint(equalTo: workshopsContainer.leadingAnchor, constant: 20),
+                emptyView.trailingAnchor.constraint(equalTo: workshopsContainer.trailingAnchor, constant: -20),
+                emptyView.bottomAnchor.constraint(equalTo: workshopsContainer.bottomAnchor)
+            ])
+        }
+    }
+    
+    // MARK: - UI Helpers
+    private func createSectionHeader(title: String, action: Selector?) -> UIView {
+        let container = UIView()
+        
+        let titleLabel = UILabel()
+        titleLabel.text = title
+        titleLabel.font = .systemFont(ofSize: 20, weight: .bold)
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(titleLabel)
+        
+        NSLayoutConstraint.activate([
+            titleLabel.topAnchor.constraint(equalTo: container.topAnchor),
+            titleLabel.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            titleLabel.bottomAnchor.constraint(equalTo: container.bottomAnchor)
+        ])
+        
+        if let action = action {
+            let addButton = UIButton(type: .system)
+            addButton.setTitle("+ Add", for: .normal)
+            addButton.titleLabel?.font = .systemFont(ofSize: 15, weight: .semibold)
+            addButton.addTarget(self, action: action, for: .touchUpInside)
+            addButton.translatesAutoresizingMaskIntoConstraints = false
+            container.addSubview(addButton)
+            
+            NSLayoutConstraint.activate([
+                addButton.centerYAnchor.constraint(equalTo: titleLabel.centerYAnchor),
+                addButton.trailingAnchor.constraint(equalTo: container.trailingAnchor)
+            ])
+        }
+        
+        return container
+    }
+    
+    private func createEmptyStateView(
+        icon: String,
+        title: String,
+        subtitle: String,
+        buttonTitle: String?,
+        action: Selector?
+    ) -> UIView {
+        let container = UIView()
+        container.backgroundColor = .systemGray6
+        container.layer.cornerRadius = 16
+        
+        let iconLabel = UILabel()
+        iconLabel.text = icon
+        iconLabel.font = .systemFont(ofSize: 48)
+        iconLabel.textAlignment = .center
+        iconLabel.translatesAutoresizingMaskIntoConstraints = false
+        
+        let titleLabel = UILabel()
+        titleLabel.text = title
+        titleLabel.font = .systemFont(ofSize: 18, weight: .semibold)
+        titleLabel.textColor = .secondaryLabel
+        titleLabel.textAlignment = .center
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
+        
+        let subtitleLabel = UILabel()
+        subtitleLabel.text = subtitle
+        subtitleLabel.font = .systemFont(ofSize: 14)
+        subtitleLabel.textColor = .tertiaryLabel
+        subtitleLabel.textAlignment = .center
+        subtitleLabel.numberOfLines = 2
+        subtitleLabel.translatesAutoresizingMaskIntoConstraints = false
+        
+        container.addSubview(iconLabel)
+        container.addSubview(titleLabel)
+        container.addSubview(subtitleLabel)
+        
+        NSLayoutConstraint.activate([
+            iconLabel.topAnchor.constraint(equalTo: container.topAnchor, constant: 32),
+            iconLabel.centerXAnchor.constraint(equalTo: container.centerXAnchor),
+            
+            titleLabel.topAnchor.constraint(equalTo: iconLabel.bottomAnchor, constant: 16),
+            titleLabel.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 20),
+            titleLabel.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -20),
+            
+            subtitleLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 8),
+            subtitleLabel.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 20),
+            subtitleLabel.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -20)
+        ])
+        
+        if let buttonTitle = buttonTitle, let action = action {
+            let button = UIButton(type: .system)
+            button.setTitle(buttonTitle, for: .normal)
+            button.backgroundColor = UIColor(named: "AccentColor")?.withAlphaComponent(0.1)
+            button.setTitleColor(UIColor(named: "AccentColor"), for: .normal)
+            button.layer.cornerRadius = 12
+            button.titleLabel?.font = .systemFont(ofSize: 15, weight: .medium)
+            button.translatesAutoresizingMaskIntoConstraints = false
+            button.addTarget(self, action: action, for: .touchUpInside)
+            container.addSubview(button)
+            
+            NSLayoutConstraint.activate([
+                button.topAnchor.constraint(equalTo: subtitleLabel.bottomAnchor, constant: 24),
+                button.centerXAnchor.constraint(equalTo: container.centerXAnchor),
+                button.widthAnchor.constraint(equalToConstant: 200),
+                button.heightAnchor.constraint(equalToConstant: 44),
+                button.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -32)
+            ])
+        } else {
+            subtitleLabel.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -32).isActive = true
+        }
+        
+        return container
+    }
+    
+    private func loadImage(from url: URL, into imageView: UIImageView) {
+        Task {
+            do {
+                let (data, _) = try await URLSession.shared.data(from: url)
+                if let image = UIImage(data: data) {
+                    await MainActor.run {
+                        imageView.image = image
+                        imageView.tintColor = nil
+                    }
+                }
+            } catch {
+                print("❌ Error loading image: \(error)")
+            }
+        }
+    }
+    
+    // MARK: - Actions
+    @objc private func editBasicInfo() {
+        let alert = UIAlertController(
+            title: "Edit Portfolio",
+            message: "Edit your portfolio information",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
+    }
+    
+    @objc private func addFilm() {
+        let alert = UIAlertController(
+            title: "Add Film",
+            message: "Film addition form coming soon!",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
+    }
+    
+    @objc private func addTheatre() {
+        let alert = UIAlertController(
+            title: "Add Theatre Production",
+            message: "Theatre form coming soon!",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
+    }
+    
+    @objc private func addWorkshop() {
+        let alert = UIAlertController(
+            title: "Add Workshop/Training",
+            message: "Workshop form coming soon!",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
+    }
+    
+    private func openURL(_ urlString: String) {
+        var finalURL = urlString
+        if !urlString.hasPrefix("http://") && !urlString.hasPrefix("https://") {
+            finalURL = "https://" + urlString
+        }
+        
+        if let url = URL(string: finalURL) {
+            UIApplication.shared.open(url)
+        }
+    }
+    
+    private func showError(message: String) {
+        let alert = UIAlertController(title: "Error", message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
     }
 }
 
-// MARK: - Data Source & Delegate
-extension PortfolioViewController: UICollectionViewDataSource, UICollectionViewDelegate {
+// MARK: - Data Models (Renamed to avoid conflicts)
+struct ActorPortfolioData {
+    let portfolio: ActorPortfolio
+    let films: [ActorPortfolioWorkItem]
+    let theatreProductions: [ActorPortfolioWorkItem]
+    let workshops: [ActorPortfolioWorkItem]
+}
 
-    func numberOfSections(in collectionView: UICollectionView) -> Int { 4 }
-
-    func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
-        switch section {
-        case 0: return 1
-        case 1: return portfolioData.workshops.count
-        case 2: return portfolioData.films.count
-        case 3: return galleryImages.count
-        default: return 0
-        }
+struct ActorPortfolio: Codable {
+    let id: String
+    let userId: String
+    let stageName: String?
+    let contactEmail: String
+    let alternateEmail: String?
+    let bio: String?
+    let profilePictureUrl: String?
+    let instagramUrl: String?
+    let youtubeUrl: String?
+    let imdbUrl: String?
+    let isPrimary: Bool
+    let isPublic: Bool
+    let createdAt: String?
+    
+    enum CodingKeys: String, CodingKey {
+        case id
+        case userId = "user_id"
+        case stageName = "stage_name"
+        case contactEmail = "contact_email"
+        case alternateEmail = "alternate_email"
+        case bio
+        case profilePictureUrl = "profile_picture_url"
+        case instagramUrl = "instagram_url"
+        case youtubeUrl = "youtube_url"
+        case imdbUrl = "imdb_url"
+        case isPrimary = "is_primary"
+        case isPublic = "is_public"
+        case createdAt = "created_at"
     }
+}
 
-    func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
-        switch indexPath.section {
-
-        case 0:
-            let cell = collectionView.dequeueReusableCell(
-                withReuseIdentifier: PortfolioHeaderCell.reuseId,
-                for: indexPath
-            ) as! PortfolioHeaderCell
-            cell.configure(with: portfolioData)
-            return cell
-
-        case 1:
-            let cell = collectionView.dequeueReusableCell(
-                withReuseIdentifier: WorkshopCell.reuseId,
-                for: indexPath
-            ) as! WorkshopCell
-            cell.configure(with: portfolioData.workshops[indexPath.row])
-            return cell
-
-        case 2:
-            let cell = collectionView.dequeueReusableCell(
-                withReuseIdentifier: FilmCell.reuseId,
-                for: indexPath
-            ) as! FilmCell
-            cell.configure(with: portfolioData.films[indexPath.row])
-            return cell
-
-        case 3:
-            let cell = collectionView.dequeueReusableCell(
-                withReuseIdentifier: GalleryCell.reuseId,
-                for: indexPath
-            ) as! GalleryCell
-            cell.configure(imageName: galleryImages[indexPath.row])
-            return cell
-
-        default:
-            return UICollectionViewCell()
-        }
+struct ActorPortfolioWorkItem: Codable {
+    let id: String
+    let portfolioId: String
+    let type: String
+    let title: String
+    let year: String?
+    let role: String?
+    let description: String?
+    
+    enum CodingKeys: String, CodingKey {
+        case id
+        case portfolioId = "portfolio_id"
+        case type
+        case title
+        case year
+        case role
+        case description
     }
 }

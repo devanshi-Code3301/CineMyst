@@ -1,65 +1,148 @@
-//
-//  SceneDelegate.swift
-//  CineMystApp
-//
-//  Created by user@50 on 11/11/25.
-//
+// SceneDelegate.swift
+// CineMystApp
 
 import UIKit
+import Supabase
 
 class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     var window: UIWindow?
 
-
-    func scene(_ scene: UIScene,
-                   willConnectTo session: UISceneSession,
-               options connectionOptions: UIScene.ConnectionOptions) {
-        
-        guard let windowScene = (scene as? UIWindowScene) else { return }
-        
+    // MARK: - App Launch
+    func scene(
+        _ scene: UIScene,
+        willConnectTo session: UISceneSession,
+        options connectionOptions: UIScene.ConnectionOptions
+    ) {
+        guard let windowScene = scene as? UIWindowScene else { return }
         window = UIWindow(windowScene: windowScene)
+
+        // Check for URL from connectionOptions (cold start)
+        if let url = connectionOptions.urlContexts.first?.url {
+            print("🔵 App opened with URL (cold start): \(url)")
+            handleIncomingURL(url)
+            return
+        }
+
+        // Normal app launch - check auth state
+        Task {
+            await determineInitialScreen()
+        }
+    }
+
+    // MARK: - OAuth Redirect Handling (Hot Start)
+    func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
+        guard let url = URLContexts.first?.url else { return }
+        print("🔵 App opened with URL (hot start): \(url)")
+        handleIncomingURL(url)
+    }
+
+    // MARK: - Handle Incoming OAuth URL
+    private func handleIncomingURL(_ url: URL) {
+        print("🔗 Processing URL: \(url.absoluteString)")
         
-        // Load Login Screen FIRST
+        Task {
+            do {
+                // This processes the OAuth callback
+                try await supabase.auth.handle(url)
+                print("✅ OAuth callback handled successfully")
+                
+                // Small delay to let session save
+                try await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+                
+                // Now check session and navigate
+                await determineInitialScreen()
+                
+            } catch {
+                print("❌ Error handling OAuth callback: \(error)")
+                await MainActor.run {
+                    showLoginScreen()
+                }
+            }
+        }
+    }
+
+    // MARK: - Determine Initial Screen
+    @MainActor
+    private func determineInitialScreen() async {
+        do {
+            let session = try await supabase.auth.session
+            
+            print("📱 Session check:")
+            print("   User: \(session.user.email ?? "unknown")")
+            print("   Expired: \(session.isExpired)")
+            
+            if session.isExpired {
+                print("🟡 Session expired → Login")
+                showLoginScreen()
+            } else {
+                print("✅ Valid session → Checking profile...")
+                
+                // Check if user has completed profile
+                let hasProfile = await checkUserProfile(userId: session.user.id)
+                
+                if hasProfile {
+                    print("✅ Profile exists → Home")
+                    showHomeScreen()
+                } else {
+                    print("⚠️ No profile → Onboarding")
+                    showOnboardingScreen()
+                }
+            }
+            
+        } catch {
+            print("🟡 No session → Login")
+            showLoginScreen()
+        }
+    }
+    
+    // MARK: - Check User Profile
+    private func checkUserProfile(userId: UUID) async -> Bool {
+        do {
+            let response = try await supabase
+                .from("profiles")
+                .select()
+                .eq("id", value: userId.uuidString)
+                .single()
+                .execute()
+            
+            return response.data.count > 0
+        } catch {
+            print("⚠️ Profile check error: \(error)")
+            return false
+        }
+    }
+
+    // MARK: - Navigation Helpers
+    @MainActor
+    private func showLoginScreen() {
         let loginVC = LoginViewController(nibName: "LoginViewController", bundle: nil)
-        
-        // Wrap in NavigationController (recommended)
         let nav = UINavigationController(rootViewController: loginVC)
-        nav.navigationBar.isHidden = true  // hide nav bar on login screen
-        
+        nav.setNavigationBarHidden(true, animated: false)
         window?.rootViewController = nav
         window?.makeKeyAndVisible()
     }
-
-
-    func sceneDidDisconnect(_ scene: UIScene) {
-        // Called as the scene is being released by the system.
-        // This occurs shortly after the scene enters the background, or when its session is discarded.
-        // Release any resources associated with this scene that can be re-created the next time the scene connects.
-        // The scene may re-connect later, as its session was not necessarily discarded (see `application:didDiscardSceneSessions` instead).
+    
+    @MainActor
+    private func showHomeScreen() {
+        // Dismiss any presented view controllers (like Safari)
+        window?.rootViewController?.dismiss(animated: true)
+        
+        window?.rootViewController = CineMystTabBarController()
+        window?.makeKeyAndVisible()
     }
-
-    func sceneDidBecomeActive(_ scene: UIScene) {
-        // Called when the scene has moved from an inactive state to an active state.
-        // Use this method to restart any tasks that were paused (or not yet started) when the scene was inactive.
+    
+    @MainActor
+    private func showOnboardingScreen() {
+        // Dismiss any presented view controllers
+        window?.rootViewController?.dismiss(animated: true)
+        
+        let coordinator = OnboardingCoordinator()
+        let birthdayVC = BirthdayViewController()
+        birthdayVC.coordinator = coordinator
+        
+        let nav = UINavigationController(rootViewController: birthdayVC)
+        window?.rootViewController = nav
+        window?.makeKeyAndVisible()
     }
-
-    func sceneWillResignActive(_ scene: UIScene) {
-        // Called when the scene will move from an active state to an inactive state.
-        // This may occur due to temporary interruptions (ex. an incoming phone call).
-    }
-
-    func sceneWillEnterForeground(_ scene: UIScene) {
-        // Called as the scene transitions from the background to the foreground.
-        // Use this method to undo the changes made on entering the background.
-    }
-
-    func sceneDidEnterBackground(_ scene: UIScene) {
-        // Called as the scene transitions from the foreground to the background.
-        // Use this method to save data, release shared resources, and store enough scene-specific state information
-        // to restore the scene back to its current state.
-    }
-
-
 }
-
