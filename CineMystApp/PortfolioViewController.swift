@@ -200,13 +200,53 @@ class PortfolioViewController: UIViewController {
                     throw NSError(domain: "Portfolio", code: 404, userInfo: [NSLocalizedDescriptionKey: "Portfolio not found"])
                 }
                 
-                // Fetch portfolio items (films, theatre, workshops)
-                // For now, start with empty arrays
+                // Fetch portfolio items using PortfolioManager
+                let allItems = try await PortfolioManager.shared.fetchPortfolioItems(portfolioId: portfolio.id)
+                
+                // Filter items by type
+                let films = allItems.filter { $0.type == .film || $0.type == .tvShow }
+                let theatre = allItems.filter { $0.type == .theatre }
+                let workshops = allItems.filter { $0.type == .workshop || $0.type == .training }
+                
+                // Convert to work items for display
+                let filmWorkItems = films.map { ActorPortfolioWorkItem(
+                    id: $0.id,
+                    portfolioId: $0.portfolioId,
+                    type: $0.type.displayName,
+                    title: $0.title,
+                    year: String($0.year),
+                    role: $0.role,
+                    description: $0.description,
+                    posterUrl: $0.posterUrl
+                )}
+                
+                let theatreWorkItems = theatre.map { ActorPortfolioWorkItem(
+                    id: $0.id,
+                    portfolioId: $0.portfolioId,
+                    type: $0.type.displayName,
+                    title: $0.title,
+                    year: String($0.year),
+                    role: $0.role,
+                    description: $0.description,
+                    posterUrl: $0.posterUrl
+                )}
+                
+                let workshopWorkItems = workshops.map { ActorPortfolioWorkItem(
+                    id: $0.id,
+                    portfolioId: $0.portfolioId,
+                    type: $0.type.displayName,
+                    title: $0.title,
+                    year: String($0.year),
+                    role: $0.role,
+                    description: $0.description,
+                    posterUrl: $0.posterUrl
+                )}
+                
                 let data = ActorPortfolioData(
                     portfolio: portfolio,
-                    films: [],
-                    theatreProductions: [],
-                    workshops: []
+                    films: filmWorkItems,
+                    theatreProductions: theatreWorkItems,
+                    workshops: workshopWorkItems
                 )
                 
                 await MainActor.run {
@@ -322,19 +362,24 @@ class PortfolioViewController: UIViewController {
                 emptyView.bottomAnchor.constraint(equalTo: filmsContainer.bottomAnchor)
             ])
         } else {
-            // TODO: Show actual film items
-            let label = UILabel()
-            label.text = "\(films.count) films"
-            label.font = .systemFont(ofSize: 14)
-            label.textColor = .secondaryLabel
-            label.translatesAutoresizingMaskIntoConstraints = false
-            filmsContainer.addSubview(label)
-            
-            NSLayoutConstraint.activate([
-                label.topAnchor.constraint(equalTo: headerView.bottomAnchor, constant: 16),
-                label.leadingAnchor.constraint(equalTo: filmsContainer.leadingAnchor, constant: 20),
-                label.bottomAnchor.constraint(equalTo: filmsContainer.bottomAnchor)
-            ])
+            var lastView: UIView = headerView
+            for (index, film) in films.enumerated() {
+                let filmView = createPortfolioItemView(item: film)
+                filmsContainer.addSubview(filmView)
+                
+                filmView.translatesAutoresizingMaskIntoConstraints = false
+                NSLayoutConstraint.activate([
+                    filmView.topAnchor.constraint(equalTo: lastView.bottomAnchor, constant: 16),
+                    filmView.leadingAnchor.constraint(equalTo: filmsContainer.leadingAnchor, constant: 20),
+                    filmView.trailingAnchor.constraint(equalTo: filmsContainer.trailingAnchor, constant: -20)
+                ])
+                
+                if index == films.count - 1 {
+                    filmView.bottomAnchor.constraint(equalTo: filmsContainer.bottomAnchor).isActive = true
+                }
+                
+                lastView = filmView
+            }
         }
     }
     
@@ -371,6 +416,25 @@ class PortfolioViewController: UIViewController {
                 emptyView.trailingAnchor.constraint(equalTo: theatreContainer.trailingAnchor, constant: -20),
                 emptyView.bottomAnchor.constraint(equalTo: theatreContainer.bottomAnchor)
             ])
+        } else {
+            var lastView: UIView = headerView
+            for (index, production) in productions.enumerated() {
+                let prodView = createPortfolioItemView(item: production)
+                theatreContainer.addSubview(prodView)
+                
+                prodView.translatesAutoresizingMaskIntoConstraints = false
+                NSLayoutConstraint.activate([
+                    prodView.topAnchor.constraint(equalTo: lastView.bottomAnchor, constant: 16),
+                    prodView.leadingAnchor.constraint(equalTo: theatreContainer.leadingAnchor, constant: 20),
+                    prodView.trailingAnchor.constraint(equalTo: theatreContainer.trailingAnchor, constant: -20)
+                ])
+                
+                if index == productions.count - 1 {
+                    prodView.bottomAnchor.constraint(equalTo: theatreContainer.bottomAnchor).isActive = true
+                }
+                
+                lastView = prodView
+            }
         }
     }
     
@@ -407,10 +471,137 @@ class PortfolioViewController: UIViewController {
                 emptyView.trailingAnchor.constraint(equalTo: workshopsContainer.trailingAnchor, constant: -20),
                 emptyView.bottomAnchor.constraint(equalTo: workshopsContainer.bottomAnchor)
             ])
+        } else {
+            var lastView: UIView = headerView
+            for (index, workshop) in workshops.enumerated() {
+                let workshopView = createPortfolioItemView(item: workshop)
+                workshopsContainer.addSubview(workshopView)
+                
+                workshopView.translatesAutoresizingMaskIntoConstraints = false
+                NSLayoutConstraint.activate([
+                    workshopView.topAnchor.constraint(equalTo: lastView.bottomAnchor, constant: 16),
+                    workshopView.leadingAnchor.constraint(equalTo: workshopsContainer.leadingAnchor, constant: 20),
+                    workshopView.trailingAnchor.constraint(equalTo: workshopsContainer.trailingAnchor, constant: -20)
+                ])
+                
+                if index == workshops.count - 1 {
+                    workshopView.bottomAnchor.constraint(equalTo: workshopsContainer.bottomAnchor).isActive = true
+                }
+                
+                lastView = workshopView
+            }
         }
     }
     
     // MARK: - UI Helpers
+    private func createPortfolioItemView(item: ActorPortfolioWorkItem) -> UIView {
+        let container = UIView()
+        container.backgroundColor = .systemGray6
+        container.layer.cornerRadius = 12
+        
+        var lastView: UIView?
+        
+        // Image View (if poster exists)
+        if let posterUrl = item.posterUrl, !posterUrl.isEmpty, let url = URL(string: posterUrl) {
+            let imageView = UIImageView()
+            imageView.contentMode = .scaleAspectFill
+            imageView.clipsToBounds = true
+            imageView.layer.cornerRadius = 12
+            imageView.translatesAutoresizingMaskIntoConstraints = false
+            
+            // Load image asynchronously
+            Task {
+                do {
+                    let (data, _) = try await URLSession.shared.data(from: url)
+                    if let image = UIImage(data: data) {
+                        DispatchQueue.main.async {
+                            imageView.image = image
+                        }
+                    }
+                } catch {
+                    print("Failed to load portfolio image: \(error)")
+                }
+            }
+            
+            container.addSubview(imageView)
+            NSLayoutConstraint.activate([
+                imageView.topAnchor.constraint(equalTo: container.topAnchor),
+                imageView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+                imageView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+                imageView.heightAnchor.constraint(equalToConstant: 180)
+            ])
+            
+            lastView = imageView
+        }
+        
+        // Title
+        let titleLabel = UILabel()
+        titleLabel.text = item.title
+        titleLabel.font = .systemFont(ofSize: 16, weight: .semibold)
+        titleLabel.textColor = .label
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
+        
+        // Year and Role
+        var subtitleText = ""
+        if let year = item.year, !year.isEmpty {
+            subtitleText = year
+        }
+        if let role = item.role, !role.isEmpty {
+            if !subtitleText.isEmpty {
+                subtitleText += " • \(role)"
+            } else {
+                subtitleText = role
+            }
+        }
+        
+        let subtitleLabel = UILabel()
+        subtitleLabel.text = subtitleText.isEmpty ? item.type : subtitleText
+        subtitleLabel.font = .systemFont(ofSize: 13)
+        subtitleLabel.textColor = .secondaryLabel
+        subtitleLabel.translatesAutoresizingMaskIntoConstraints = false
+        
+        // Description
+        let descLabel = UILabel()
+        descLabel.text = item.description
+        descLabel.font = .systemFont(ofSize: 13)
+        descLabel.textColor = .tertiaryLabel
+        descLabel.numberOfLines = 3
+        descLabel.translatesAutoresizingMaskIntoConstraints = false
+        
+        container.addSubview(titleLabel)
+        container.addSubview(subtitleLabel)
+        if let desc = item.description, !desc.isEmpty {
+            container.addSubview(descLabel)
+        }
+        
+        let topOffset = lastView == nil ? 0 : 16
+        NSLayoutConstraint.activate([
+            titleLabel.topAnchor.constraint(equalTo: lastView?.bottomAnchor ?? container.topAnchor, constant: 16 + CGFloat(topOffset)),
+            titleLabel.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
+            titleLabel.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
+            
+            subtitleLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 4),
+            subtitleLabel.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
+            subtitleLabel.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16)
+        ])
+        
+        if let _ = item.description {
+            NSLayoutConstraint.activate([
+                descLabel.topAnchor.constraint(equalTo: subtitleLabel.bottomAnchor, constant: 8),
+                descLabel.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
+                descLabel.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
+                descLabel.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -16)
+            ])
+        } else {
+            subtitleLabel.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -16).isActive = true
+        }
+        
+        container.translatesAutoresizingMaskIntoConstraints = false
+        container.heightAnchor.constraint(greaterThanOrEqualToConstant: 80).isActive = true
+        
+        return container
+    }
+    
     private func createSectionHeader(title: String, action: Selector?) -> UIView {
         let container = UIView()
         
@@ -545,33 +736,29 @@ class PortfolioViewController: UIViewController {
     }
     
     @objc private func addFilm() {
-        let alert = UIAlertController(
-            title: "Add Film",
-            message: "Film addition form coming soon!",
-            preferredStyle: .alert
-        )
-        alert.addAction(UIAlertAction(title: "OK", style: .default))
-        present(alert, animated: true)
+        guard let portfolioId = portfolioData?.portfolio.id else { return }
+        presentAddItemForm(for: .film, portfolioId: portfolioId)
     }
     
     @objc private func addTheatre() {
-        let alert = UIAlertController(
-            title: "Add Theatre Production",
-            message: "Theatre form coming soon!",
-            preferredStyle: .alert
-        )
-        alert.addAction(UIAlertAction(title: "OK", style: .default))
-        present(alert, animated: true)
+        guard let portfolioId = portfolioData?.portfolio.id else { return }
+        presentAddItemForm(for: .theatre, portfolioId: portfolioId)
     }
     
     @objc private func addWorkshop() {
-        let alert = UIAlertController(
-            title: "Add Workshop/Training",
-            message: "Workshop form coming soon!",
-            preferredStyle: .alert
-        )
-        alert.addAction(UIAlertAction(title: "OK", style: .default))
-        present(alert, animated: true)
+        guard let portfolioId = portfolioData?.portfolio.id else { return }
+        presentAddItemForm(for: .workshop, portfolioId: portfolioId)
+    }
+    
+    private func presentAddItemForm(for type: PortfolioItemType, portfolioId: String) {
+        let addVC = AddPortfolioItemViewController()
+        addVC.portfolioId = portfolioId
+        addVC.itemType = type
+        addVC.onItemAdded = { [weak self] _ in
+            self?.fetchPortfolioData()
+        }
+        let nav = UINavigationController(rootViewController: addVC)
+        present(nav, animated: true)
     }
     
     private func openURL(_ urlString: String) {
@@ -640,6 +827,7 @@ struct ActorPortfolioWorkItem: Codable {
     let year: String?
     let role: String?
     let description: String?
+    let posterUrl: String?
     
     enum CodingKeys: String, CodingKey {
         case id
@@ -649,5 +837,6 @@ struct ActorPortfolioWorkItem: Codable {
         case year
         case role
         case description
+        case posterUrl = "poster_url"
     }
 }

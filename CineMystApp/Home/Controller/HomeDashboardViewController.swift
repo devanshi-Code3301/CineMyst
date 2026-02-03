@@ -62,8 +62,8 @@ final class HomeDashboardViewController: UIViewController {
         hostingController.view.translatesAutoresizingMaskIntoConstraints = false
         
         NSLayoutConstraint.activate([
-            hostingController.view.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
-            hostingController.view.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -80),
+            hostingController.view.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: 60),
+            hostingController.view.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: 10),
             hostingController.view.widthAnchor.constraint(equalToConstant: 220),
             hostingController.view.heightAnchor.constraint(equalToConstant: 220)
         ])
@@ -237,16 +237,9 @@ final class HomeDashboardViewController: UIViewController {
     
     // MARK: - Post Creation Actions
     private func openCameraForPost() {
-        guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
-            showAlert(message: "Camera not available")
-            return
-        }
-        
-        let picker = UIImagePickerController()
-        picker.sourceType = .camera
-        picker.delegate = self
-        picker.mediaTypes = ["public.image", "public.movie"]
-        present(picker, animated: true)
+        let cameraVC = CameraViewController()
+        cameraVC.modalPresentationStyle = .fullScreen
+        present(cameraVC, animated: true)
     }
     
     private func openGalleryForPost() {
@@ -332,27 +325,6 @@ extension HomeDashboardViewController: UITableViewDataSource, UITableViewDelegat
     
     func tableView(_ tableView: UITableView, estimatedHeightForRowAt indexPath: IndexPath) -> CGFloat {
         indexPath.section == 0 ? 440 : 180
-    }
-}
-
-// MARK: - Camera Picker Delegate
-extension HomeDashboardViewController: UIImagePickerControllerDelegate, UINavigationControllerDelegate {
-    
-    func imagePickerController(_ picker: UIImagePickerController,
-                               didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
-        picker.dismiss(animated: true)
-        
-        if let image = info[.originalImage] as? UIImage {
-            let media = DraftMedia(image: image, videoURL: nil, type: .image)
-            openPostComposer(with: [media])
-        } else if let videoURL = info[.mediaURL] as? URL {
-            let media = DraftMedia(image: nil, videoURL: videoURL, type: .video)
-            openPostComposer(with: [media])
-        }
-    }
-    
-    func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
-        picker.dismiss(animated: true)
     }
 }
 

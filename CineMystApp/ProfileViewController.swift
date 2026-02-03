@@ -8,6 +8,11 @@ import UIKit
 
 final class ProfileViewController: UIViewController {
 
+    // MARK: - Properties
+    var viewingUserId: String? // ID of the user being viewed (nil = current user)
+    var isOwnProfile: Bool { viewingUserId == nil }
+    private var userIdFromSession: String? // Cache of current user's ID
+
     // MARK: - UI Components
     private let scrollView = UIScrollView()
     private let contentView = UIView()
@@ -45,6 +50,8 @@ final class ProfileViewController: UIViewController {
     // MARK: - Profile Data
     private var userProfile: UserProfileData?
     private var hasPortfolio = false // ✅ Track portfolio state
+    private var connectionState: ConnectionState = .notConnected
+    private var connectionCount: Int = 0
 
     // MARK: - Init
     init() {
@@ -65,6 +72,11 @@ final class ProfileViewController: UIViewController {
         super.viewDidLoad()
         view.backgroundColor = .systemBackground
         hidesBottomBarWhenPushed = true
+
+        // Cache current user ID
+        Task {
+            self.userIdFromSession = try? await AuthManager.shared.currentSession()?.user.id.uuidString
+        }
 
         setupNavigationBar()
         setupScrollView()
@@ -141,12 +153,20 @@ final class ProfileViewController: UIViewController {
         connectionsLabel.font = .systemFont(ofSize: 14, weight: .medium)
         connectionsLabel.textAlignment = .center
         connectionsLabel.textColor = .secondaryLabel
+        connectionsLabel.isUserInteractionEnabled = true
+        connectionsLabel.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(viewConnectionsTapped)))
 
-        connectButton.setTitle("Connected", for: .normal)
+        connectButton.setTitle("Connect", for: .normal)
         connectButton.backgroundColor = UIColor(named: "AccentColor") ?? UIColor(red: 0.3, green: 0.1, blue: 0.2, alpha: 1.0)
         connectButton.setTitleColor(.white, for: .normal)
         connectButton.layer.cornerRadius = 10
         connectButton.titleLabel?.font = .systemFont(ofSize: 15, weight: .semibold)
+        connectButton.addTarget(self, action: #selector(connectionButtonTapped), for: .touchUpInside)
+        
+        // Hide connect button if viewing own profile
+        if isOwnProfile {
+            connectButton.isHidden = true
+        }
 
         portfolioButton.setTitle("Loading...", for: .normal)
         portfolioButton.backgroundColor = UIColor(named: "AccentColor") ?? UIColor(red: 0.3, green: 0.1, blue: 0.2, alpha: 1.0)
@@ -201,7 +221,8 @@ final class ProfileViewController: UIViewController {
         addButton.contentHorizontalAlignment = .fill
         addButton.translatesAutoresizingMaskIntoConstraints = false
         addButton.addTarget(self, action: #selector(addButtonTapped), for: .touchUpInside)
-        addButton.isHidden = true // ✅ Hidden initially until portfolio exists
+        // ✅ Only show for own profile when portfolio exists
+        addButton.isHidden = !isOwnProfile
         
         view.addSubview(addButton)
         
@@ -295,12 +316,26 @@ final class ProfileViewController: UIViewController {
             do {
                 print("🔍 Fetching profile data...")
                 
-                guard let session = try await AuthManager.shared.currentSession() else {
-                    throw ProfileError.invalidSession
-                }
+                // Determine which user ID to fetch and get email if own profile
+                let userId: UUID
+                var email: String = ""
                 
-                let userId = session.user.id
-                print("👤 User ID: \(userId)")
+                if let viewingUserId = viewingUserId {
+                    // Viewing another user's profile
+                    guard let uuid = UUID(uuidString: viewingUserId) else {
+                        throw ProfileError.invalidSession
+                    }
+                    userId = uuid
+                    print("👤 Viewing user: \(viewingUserId)")
+                } else {
+                    // Viewing own profile
+                    guard let session = try await AuthManager.shared.currentSession() else {
+                        throw ProfileError.invalidSession
+                    }
+                    userId = session.user.id
+                    email = session.user.email ?? ""
+                    print("👤 Viewing own profile. User ID: \(userId)")
+                }
                 
                 let profileResponse = try await supabase
                     .from("profiles")
@@ -355,7 +390,7 @@ final class ProfileViewController: UIViewController {
                     profile: profile,
                     artistProfile: artistProfile,
                     castingProfile: castingProfile,
-                    email: session.user.email ?? ""
+                    email: email
                 )
                 
                 await MainActor.run {
@@ -367,6 +402,10 @@ final class ProfileViewController: UIViewController {
                     
                     // ✅ Check portfolio status and update buttons
                     self.checkAndUpdatePortfolioButton(userId: userId.uuidString)
+                    
+                    // ✅ Fetch connection state and count for other users
+                    self.fetchAndUpdateConnectionState()
+                    self.fetchConnectionCount()
                     
                     self.loadingIndicator.stopAnimating()
                     
@@ -686,6 +725,153 @@ extension ProfileViewController: UICollectionViewDataSource, UICollectionViewDel
     func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, sizeForItemAt indexPath: IndexPath) -> CGSize {
         let width = (collectionView.frame.width - 6) / 3
         return CGSize(width: width, height: width)
+    }
+}
+
+// MARK: - Connection Management
+extension ProfileViewController {
+    
+    // Fetch connection state and update UI
+    private func fetchAndUpdateConnectionState() {
+        guard !isOwnProfile, let viewingUserId = viewingUserId else { return }
+        
+        Task {
+            do {
+                guard let currentUser = try await AuthManager.shared.currentSession() else { return }
+                let currentUserId = currentUser.user.id.uuidString
+                
+                let state = try await ConnectionManager.shared.getConnectionState(
+                    currentUserId: currentUserId,
+                    otherUserId: viewingUserId
+                )
+                
+                await MainActor.run {
+                    self.connectionState = state
+                    self.updateConnectionButtonUI()
+                }
+            } catch {
+                print("❌ Error fetching connection state: \(error)")
+            }
+        }
+    }
+    
+    // Update connection button based on state
+    private func updateConnectionButtonUI() {
+        switch connectionState {
+        case .notConnected:
+            connectButton.setTitle("Connect", for: .normal)
+            connectButton.backgroundColor = UIColor(named: "AccentColor") ?? UIColor(red: 0.3, green: 0.1, blue: 0.2, alpha: 1.0)
+            
+        case .requestSent:
+            connectButton.setTitle("Request Sent", for: .normal)
+            connectButton.backgroundColor = .systemGray
+            connectButton.isEnabled = true
+            
+        case .requestReceived:
+            connectButton.setTitle("Accept Request", for: .normal)
+            connectButton.backgroundColor = UIColor(named: "AccentColor") ?? UIColor(red: 0.3, green: 0.1, blue: 0.2, alpha: 1.0)
+            
+        case .connected:
+            connectButton.setTitle("Connected", for: .normal)
+            connectButton.backgroundColor = .systemGreen
+            connectButton.isEnabled = true
+            
+        case .rejected:
+            connectButton.setTitle("Connect", for: .normal)
+            connectButton.backgroundColor = UIColor(named: "AccentColor") ?? UIColor(red: 0.3, green: 0.1, blue: 0.2, alpha: 1.0)
+        }
+    }
+    
+    @objc private func connectionButtonTapped() {
+        guard let viewingUserId = viewingUserId else { return }
+        
+        Task {
+            do {
+                switch connectionState {
+                case .notConnected, .rejected:
+                    // Send connection request
+                    try await ConnectionManager.shared.sendConnectionRequest(to: viewingUserId)
+                    self.connectionState = .requestSent
+                    
+                case .requestSent:
+                    // Cancel request
+                    try await ConnectionManager.shared.cancelConnectionRequest(to: viewingUserId)
+                    self.connectionState = .notConnected
+                    
+                case .requestReceived:
+                    // Accept request
+                    try await ConnectionManager.shared.acceptConnectionRequest(from: viewingUserId)
+                    self.connectionState = .connected
+                    
+                case .connected:
+                    // Remove connection
+                    showRemoveConnectionAlert(userId: viewingUserId)
+                }
+                
+                await MainActor.run {
+                    self.updateConnectionButtonUI()
+                    self.fetchConnectionCount()
+                }
+            } catch {
+                print("❌ Error updating connection: \(error)")
+                showAlert(message: "Failed to update connection")
+            }
+        }
+    }
+    
+    @objc private func viewConnectionsTapped() {
+        let userId = viewingUserId ?? userIdFromSession ?? ""
+        guard !userId.isEmpty else { return }
+        
+        let connectionsVC = ConnectionsListViewController()
+        connectionsVC.userId = userId
+        navigationController?.pushViewController(connectionsVC, animated: true)
+    }
+    
+    private func fetchConnectionCount() {
+        Task {
+            do {
+                let userId = viewingUserId ?? userIdFromSession ?? ""
+                guard !userId.isEmpty else { return }
+                
+                let count = try await ConnectionManager.shared.getConnectionCount(userId: userId)
+                
+                await MainActor.run {
+                    self.connectionCount = count
+                    self.connectionsLabel.text = "\(count) Connection\(count == 1 ? "" : "s")"
+                }
+            } catch {
+                print("❌ Error fetching connection count: \(error)")
+            }
+        }
+    }
+    
+    private func showRemoveConnectionAlert(userId: String) {
+        let alert = UIAlertController(title: "Remove Connection?", message: "Are you sure you want to remove this connection?", preferredStyle: .alert)
+        
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Remove", style: .destructive) { _ in
+            Task {
+                do {
+                    try await ConnectionManager.shared.removeConnection(with: userId)
+                    self.connectionState = .notConnected
+                    await MainActor.run {
+                        self.updateConnectionButtonUI()
+                        self.fetchConnectionCount()
+                    }
+                } catch {
+                    print("❌ Error removing connection: \(error)")
+                }
+            }
+        })
+        
+        present(alert, animated: true)
+    }
+    
+    private func showAlert(message: String) {
+        let alert = UIAlertController(title: nil, message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
     }
 }
 
