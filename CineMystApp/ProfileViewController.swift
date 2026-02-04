@@ -552,6 +552,7 @@ final class ProfileViewController: UIViewController, UICollectionViewDataSource,
     }
     
     // MARK: - Check Portfolio Status and Update Button
+    // MARK: - Check Portfolio Status and Update Button
     private func checkAndUpdatePortfolioButton(userId: String) {
         Task {
             do {
@@ -569,28 +570,39 @@ final class ProfileViewController: UIViewController, UICollectionViewDataSource,
                     self.hasPortfolio = !portfolios.isEmpty
                     
                     if self.isOwnProfile {
-                        // Own profile - show Create or Edit
+                        // Own profile
+                        self.portfolioButton.isHidden = false
+                        self.connectButton.isHidden = true
+                        
                         if self.hasPortfolio {
+                            // Own profile WITH portfolio
                             self.portfolioButton.setTitle("Edit Portfolio", for: .normal)
                             self.portfolioButton.backgroundColor = UIColor(named: "AccentColor") ?? UIColor(red: 0.3, green: 0.1, blue: 0.2, alpha: 1.0)
-                            self.addButton.isHidden = false // Show + button
+                            self.addButton.isHidden = false // ✅ Show + button
                             print("✅ Own profile with portfolio - showing Edit Portfolio + Add button")
                         } else {
+                            // Own profile WITHOUT portfolio
                             self.portfolioButton.setTitle("Create Portfolio", for: .normal)
                             self.portfolioButton.backgroundColor = .systemGreen
-                            self.addButton.isHidden = true // Hide + button
+                            self.addButton.isHidden = true // ✅ Hide + button
                             print("⚠️ Own profile without portfolio - showing Create Portfolio")
                         }
                     } else {
-                        // Viewing other user's profile
+                        // Viewing someone else's profile
+                        self.addButton.isHidden = true // ✅ Never show + button for other profiles
+                        self.connectButton.isHidden = false
+                        
                         if self.hasPortfolio {
+                            // Other user HAS portfolio
                             self.portfolioButton.setTitle("View Portfolio", for: .normal)
                             self.portfolioButton.backgroundColor = UIColor(named: "AccentColor") ?? UIColor(red: 0.3, green: 0.1, blue: 0.2, alpha: 1.0)
                             self.portfolioButton.isHidden = false
+                            print("📖 Viewing other profile with portfolio - showing View Portfolio")
                         } else {
-                            self.portfolioButton.isHidden = true
+                            // Other user DOES NOT have portfolio
+                            self.portfolioButton.isHidden = true // ✅ Hide button completely
+                            print("ℹ️ Viewing other profile without portfolio - hiding button")
                         }
-                        self.addButton.isHidden = true
                     }
                 }
                 
@@ -603,7 +615,6 @@ final class ProfileViewController: UIViewController, UICollectionViewDataSource,
             }
         }
     }
-    
     // MARK: - Load Profile Image
     private func loadProfileImage(from url: URL) {
         Task {
