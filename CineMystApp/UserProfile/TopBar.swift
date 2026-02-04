@@ -17,10 +17,6 @@ struct TopBarView: View {
                     .foregroundColor(.primary)
             }
             Spacer()
-            Text("Acting for Life")
-                .font(.headline)
-                .fontWeight(.semibold)
-            Spacer()
             Image(systemName: "ellipsis")
                 .font(.title3)
                 .rotationEffect(.degrees(90))

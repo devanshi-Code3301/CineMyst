@@ -15,7 +15,7 @@ struct UserProfileData {
     let email: String
 }
 
-final class ProfileViewController: UIViewController {
+final class ProfileViewController: UIViewController, UICollectionViewDataSource, UICollectionViewDelegateFlowLayout {
 
     // MARK: - Properties
     var viewingUserId: String? // ID of the user being viewed (nil = current user)
@@ -34,9 +34,8 @@ final class ProfileViewController: UIViewController {
     private let bannerImageView = UIImageView()
     private let bannerEditButton = UIButton()
 
-    private let coverLabel = UILabel()
+    // Removed coverLabel ("Acting for Life")
     private let profileImageView = UIImageView()
-    private let verifiedBadge = UIImageView()
 
     private let nameLabel = UILabel()
     private let usernameLabel = UILabel()
@@ -150,9 +149,7 @@ final class ProfileViewController: UIViewController {
         bannerEditButton.isHidden = !isOwnProfile
         bannerEditButton.addTarget(self, action: #selector(editBannerTapped), for: .touchUpInside)
 
-        coverLabel.text = "Loading..."
-        coverLabel.font = UIFont.systemFont(ofSize: 26, weight: .bold)
-        coverLabel.textAlignment = .center
+        // coverLabel removed
 
         profileImageView.image = UIImage(systemName: "person.circle.fill")
         profileImageView.tintColor = .systemGray3
@@ -162,10 +159,6 @@ final class ProfileViewController: UIViewController {
         profileImageView.layer.borderColor = UIColor.white.cgColor
         profileImageView.contentMode = .scaleAspectFill
         profileImageView.translatesAutoresizingMaskIntoConstraints = false
-
-        verifiedBadge.image = UIImage(systemName: "checkmark.seal.fill")
-        verifiedBadge.tintColor = UIColor.systemBlue
-        verifiedBadge.translatesAutoresizingMaskIntoConstraints = false
 
         nameLabel.text = "..."
         nameLabel.font = .systemFont(ofSize: 18, weight: .semibold)
@@ -232,7 +225,7 @@ final class ProfileViewController: UIViewController {
         collectionView.backgroundColor = .clear
         collectionView.register(GalleryCell.self, forCellWithReuseIdentifier: "GalleryCell")
 
-        [bannerImageView, bannerEditButton, coverLabel, profileImageView, verifiedBadge, nameLabel, usernameLabel, connectionsLabel,
+        [bannerImageView, bannerEditButton, profileImageView, nameLabel, usernameLabel, connectionsLabel,
          connectButton, portfolioButton, aboutTitle, aboutText, locationIcon, experienceIcon,
          locationLabel, experienceLabel, segmentControl, collectionView].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
@@ -279,19 +272,11 @@ final class ProfileViewController: UIViewController {
             bannerEditButton.widthAnchor.constraint(equalToConstant: 36),
             bannerEditButton.heightAnchor.constraint(equalToConstant: 36),
 
-            coverLabel.topAnchor.constraint(equalTo: bannerImageView.bottomAnchor, constant: 16),
-            coverLabel.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
-
             // Profile image overlaps banner
             profileImageView.topAnchor.constraint(equalTo: bannerImageView.bottomAnchor, constant: -50),
             profileImageView.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
             profileImageView.widthAnchor.constraint(equalToConstant: 100),
             profileImageView.heightAnchor.constraint(equalToConstant: 100),
-
-            verifiedBadge.trailingAnchor.constraint(equalTo: profileImageView.trailingAnchor, constant: 6),
-            verifiedBadge.bottomAnchor.constraint(equalTo: profileImageView.bottomAnchor, constant: 2),
-            verifiedBadge.widthAnchor.constraint(equalToConstant: 20),
-            verifiedBadge.heightAnchor.constraint(equalToConstant: 20),
 
             nameLabel.topAnchor.constraint(equalTo: profileImageView.bottomAnchor, constant: 10),
             nameLabel.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
@@ -474,13 +459,6 @@ final class ProfileViewController: UIViewController {
     private func updateUI(with data: UserProfileData) {
         print("🎨 Updating UI with profile data")
         
-        if data.profile.role == "artist" {
-            let primaryRole = data.artistProfile?.primaryRoles.first ?? "Actor"
-            coverLabel.text = "\(primaryRole) for Life"
-        } else {
-            coverLabel.text = data.castingProfile?.specificRole ?? "Casting Professional"
-        }
-        
         let displayName = data.profile.fullName ?? data.email.components(separatedBy: "@").first?.capitalized ?? "User"
         nameLabel.text = displayName
         
@@ -544,7 +522,7 @@ final class ProfileViewController: UIViewController {
         print("✅ UI updated successfully")
     }
     
-    // MARK: - ✅ Load Banner Image
+    // MARK: - Load Banner Image
     private func loadBannerImage(from urlString: String?) {
         guard let urlString = urlString, !urlString.isEmpty, let url = URL(string: urlString) else {
             print("⚠️ No banner URL, using default grey")
@@ -573,7 +551,7 @@ final class ProfileViewController: UIViewController {
         }
     }
     
-    // MARK: - ✅ Check Portfolio Status and Update Button
+    // MARK: - Check Portfolio Status and Update Button
     private func checkAndUpdatePortfolioButton(userId: String) {
         Task {
             do {
@@ -590,18 +568,29 @@ final class ProfileViewController: UIViewController {
                 await MainActor.run {
                     self.hasPortfolio = !portfolios.isEmpty
                     
-                    if self.hasPortfolio {
-                        // ✅ Portfolio exists
-                        self.portfolioButton.setTitle("View Portfolio", for: .normal)
-                        self.portfolioButton.backgroundColor = UIColor(named: "AccentColor") ?? UIColor(red: 0.3, green: 0.1, blue: 0.2, alpha: 1.0)
-                        self.addButton.isHidden = false // Show + button
-                        print("✅ Portfolio exists - showing View Portfolio + Add button")
+                    if self.isOwnProfile {
+                        // Own profile - show Create or Edit
+                        if self.hasPortfolio {
+                            self.portfolioButton.setTitle("Edit Portfolio", for: .normal)
+                            self.portfolioButton.backgroundColor = UIColor(named: "AccentColor") ?? UIColor(red: 0.3, green: 0.1, blue: 0.2, alpha: 1.0)
+                            self.addButton.isHidden = false // Show + button
+                            print("✅ Own profile with portfolio - showing Edit Portfolio + Add button")
+                        } else {
+                            self.portfolioButton.setTitle("Create Portfolio", for: .normal)
+                            self.portfolioButton.backgroundColor = .systemGreen
+                            self.addButton.isHidden = true // Hide + button
+                            print("⚠️ Own profile without portfolio - showing Create Portfolio")
+                        }
                     } else {
-                        // ⚠️ No portfolio
-                        self.portfolioButton.setTitle("Create Portfolio", for: .normal)
-                        self.portfolioButton.backgroundColor = .systemGreen
-                        self.addButton.isHidden = true // Hide + button
-                        print("⚠️ No portfolio - showing Create Portfolio")
+                        // Viewing other user's profile
+                        if self.hasPortfolio {
+                            self.portfolioButton.setTitle("View Portfolio", for: .normal)
+                            self.portfolioButton.backgroundColor = UIColor(named: "AccentColor") ?? UIColor(red: 0.3, green: 0.1, blue: 0.2, alpha: 1.0)
+                            self.portfolioButton.isHidden = false
+                        } else {
+                            self.portfolioButton.isHidden = true
+                        }
+                        self.addButton.isHidden = true
                     }
                 }
                 
@@ -685,7 +674,6 @@ final class ProfileViewController: UIViewController {
 
     // MARK: - Portfolio Actions
     
-    // ✅ + Button: Opens creation form (same as main button when no portfolio)
     @objc private func addButtonTapped() {
         guard userProfile?.profile.id != nil else {
             showError(message: "User profile not loaded")
@@ -696,21 +684,28 @@ final class ProfileViewController: UIViewController {
         openPortfolioCreationForm()
     }
 
-    // ✅ Main Portfolio Button: Smart - Create or View based on state
     @objc private func portfolioButtonTapped() {
-        guard let userId = userProfile?.profile.id else {
+        guard let userProfile = userProfile else {
             showError(message: "User profile not loaded")
             return
         }
         
-        if hasPortfolio {
-            // Portfolio exists → View it
-            print("📖 Opening portfolio viewer")
-            openPortfolioViewer(isOwnProfile: true)
+        if isOwnProfile {
+            if hasPortfolio {
+                // Own profile with portfolio → Edit it
+                print("📖 Opening portfolio editor")
+                openPortfolioViewer(isOwnProfile: true)
+            } else {
+                // Own profile without portfolio → Create it
+                print("📝 Opening portfolio creation form")
+                openPortfolioCreationForm()
+            }
         } else {
-            // No portfolio → Create it
-            print("📝 Opening portfolio creation form")
-            openPortfolioCreationForm()
+            if hasPortfolio {
+                // Viewing other user's portfolio → View it
+                print("📖 Opening portfolio viewer")
+                openPortfolioViewer(isOwnProfile: false)
+            }
         }
     }
 
@@ -726,7 +721,6 @@ final class ProfileViewController: UIViewController {
         let navController = UINavigationController(rootViewController: creationVC)
         navController.modalPresentationStyle = .pageSheet
         
-        // ✅ Listen for portfolio creation
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(portfolioWasCreated),
@@ -738,11 +732,8 @@ final class ProfileViewController: UIViewController {
     }
 
     @objc private func portfolioWasCreated() {
-        // ✅ Refresh to update button states
         guard let userId = userProfile?.profile.id else { return }
         checkAndUpdatePortfolioButton(userId: userId)
-        
-        // Show success message
         showSuccess(message: "Portfolio created! You can now add your work.")
     }
 
@@ -750,7 +741,7 @@ final class ProfileViewController: UIViewController {
         NotificationCenter.default.removeObserver(self)
     }
     
-    // MARK: - ✅ Banner Edit Action
+    // MARK: - Banner Edit Action
     @objc private func editBannerTapped() {
         var configuration = PHPickerConfiguration()
         configuration.filter = .images
@@ -767,7 +758,17 @@ final class ProfileViewController: UIViewController {
     }
 }
 
-// MARK: - ✅ PHPickerViewControllerDelegate (Banner Upload)
+// MARK: - UIImage Extension for Resizing
+extension UIImage {
+    func resized(to size: CGSize) -> UIImage {
+        let renderer = UIGraphicsImageRenderer(size: size)
+        return renderer.image { _ in
+            self.draw(in: CGRect(origin: .zero, size: size))
+        }
+    }
+}
+
+// MARK: - PHPickerViewControllerDelegate (Banner Upload)
 extension ProfileViewController: PHPickerViewControllerDelegate {
     func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
         picker.dismiss(animated: true)
@@ -790,7 +791,6 @@ extension ProfileViewController: PHPickerViewControllerDelegate {
                 return
             }
             
-            // Upload banner image
             Task {
                 await self.uploadBannerImage(image)
             }
@@ -798,51 +798,32 @@ extension ProfileViewController: PHPickerViewControllerDelegate {
     }
     
     private func uploadBannerImage(_ image: UIImage) async {
-        guard let userId = userProfile?.profile.id else {
-            await MainActor.run {
-                showError(message: "User profile not loaded")
-            }
-            return
-        }
-        
-        // Show loading
-        await MainActor.run {
-            loadingIndicator.startAnimating()
-        }
+        guard let userId = userProfile?.profile.id else { return }
         
         do {
+            loadingIndicator.startAnimating()
+            
             // Resize image to reasonable dimensions (1200x300 for banner)
             let resizedImage = image.resized(to: CGSize(width: 1200, height: 300))
+            guard let imageData = resizedImage.jpegData(compressionQuality: 0.8) else { return }
             
-            guard let imageData = resizedImage.jpegData(compressionQuality: 0.8) else {
-                throw NSError(domain: "ImageError", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to convert image to data"])
-            }
-            
-            // Create file path: profile-banners/{user_id}/banner.jpg
             let fileName = "banner_\(Date().timeIntervalSince1970).jpg"
             let filePath = "\(userId)/\(fileName)"
             
             print("📤 Uploading banner to: profile-banners/\(filePath)")
             
-            // Upload to Supabase Storage
             let uploadResponse = try await supabase.storage
                 .from("profile-banners")
-                .upload(
-                    path: filePath,
-                    file: imageData,
-                    options: .init(upsert: false)
-                )
+                .upload(path: filePath, file: imageData, options: .init(upsert: false))
             
             print("✅ Banner uploaded: \(uploadResponse)")
             
-            // Get public URL
             let publicURL = try supabase.storage
                 .from("profile-banners")
                 .getPublicURL(path: filePath)
             
             print("🔗 Banner URL: \(publicURL)")
             
-            // Update database with new banner URL
             let updateData: [String: String] = ["banner_url": publicURL.absoluteString]
             try await supabase
                 .from("profiles")
@@ -852,12 +833,10 @@ extension ProfileViewController: PHPickerViewControllerDelegate {
             
             print("✅ Database updated with banner URL")
             
-            // Update UI
             await MainActor.run {
                 self.bannerImageView.image = resizedImage
                 self.bannerImageView.backgroundColor = .clear
                 
-                // Update local profile data
                 if var profile = self.userProfile?.profile {
                     profile.bannerUrl = publicURL.absoluteString
                     self.userProfile = UserProfileData(
@@ -871,7 +850,6 @@ extension ProfileViewController: PHPickerViewControllerDelegate {
                 self.loadingIndicator.stopAnimating()
                 self.showSuccess(message: "Banner updated successfully!")
             }
-            
         } catch {
             print("❌ Error uploading banner: \(error)")
             await MainActor.run {
@@ -882,8 +860,8 @@ extension ProfileViewController: PHPickerViewControllerDelegate {
     }
 }
 
-// MARK: - UICollectionView
-extension ProfileViewController: UICollectionViewDataSource, UICollectionViewDelegateFlowLayout {
+// MARK: - UICollectionView DataSource & Delegate
+extension ProfileViewController {
     func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
         let selectedTab = segmentControl.titleForSegment(at: segmentControl.selectedSegmentIndex) ?? "Gallery"
         
@@ -893,7 +871,7 @@ extension ProfileViewController: UICollectionViewDataSource, UICollectionViewDel
         case "Flicks":
             return flicksPosts.count
         default: // Tagged
-            return 0 // TODO: Implement tagged posts
+            return 0
         }
     }
 
@@ -912,11 +890,10 @@ extension ProfileViewController: UICollectionViewDataSource, UICollectionViewDel
             break
         }
         
-        if let post = post,
-           let firstMedia = post.mediaUrls.first {
+        if let post = post, let firstMedia = post.mediaUrls.first {
             cell.configureWithURL(imageURL: firstMedia.url)
         } else {
-            cell.configure(imageName: "profile_image") // Fallback placeholder
+            cell.configure(imageName: "profile_image")
         }
         
         return cell
@@ -931,7 +908,6 @@ extension ProfileViewController: UICollectionViewDataSource, UICollectionViewDel
 // MARK: - Connection Management
 extension ProfileViewController {
     
-    // Fetch connection state and update UI
     private func fetchAndUpdateConnectionState() {
         guard !isOwnProfile, let viewingUserId = viewingUserId else { return }
         
@@ -955,12 +931,12 @@ extension ProfileViewController {
         }
     }
     
-    // Update connection button based on state
     private func updateConnectionButtonUI() {
         switch connectionState {
         case .notConnected:
             connectButton.setTitle("Connect", for: .normal)
             connectButton.backgroundColor = UIColor(named: "AccentColor") ?? UIColor(red: 0.3, green: 0.1, blue: 0.2, alpha: 1.0)
+            connectButton.isEnabled = true
             
         case .requestSent:
             connectButton.setTitle("Request Sent", for: .normal)
@@ -970,6 +946,7 @@ extension ProfileViewController {
         case .requestReceived:
             connectButton.setTitle("Accept Request", for: .normal)
             connectButton.backgroundColor = UIColor(named: "AccentColor") ?? UIColor(red: 0.3, green: 0.1, blue: 0.2, alpha: 1.0)
+            connectButton.isEnabled = true
             
         case .connected:
             connectButton.setTitle("Connected", for: .normal)
@@ -979,6 +956,7 @@ extension ProfileViewController {
         case .rejected:
             connectButton.setTitle("Connect", for: .normal)
             connectButton.backgroundColor = UIColor(named: "AccentColor") ?? UIColor(red: 0.3, green: 0.1, blue: 0.2, alpha: 1.0)
+            connectButton.isEnabled = true
         }
     }
     
@@ -989,23 +967,20 @@ extension ProfileViewController {
             do {
                 switch connectionState {
                 case .notConnected, .rejected:
-                    // Send connection request
                     try await ConnectionManager.shared.sendConnectionRequest(to: viewingUserId)
                     self.connectionState = .requestSent
                     
                 case .requestSent:
-                    // Cancel request
                     try await ConnectionManager.shared.cancelConnectionRequest(to: viewingUserId)
                     self.connectionState = .notConnected
                     
                 case .requestReceived:
-                    // Accept request
                     try await ConnectionManager.shared.acceptConnectionRequest(from: viewingUserId)
                     self.connectionState = .connected
                     
                 case .connected:
-                    // Remove connection
                     showRemoveConnectionAlert(userId: viewingUserId)
+                    return
                 }
                 
                 await MainActor.run {
@@ -1072,15 +1047,5 @@ extension ProfileViewController {
         let alert = UIAlertController(title: nil, message: message, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "OK", style: .default))
         present(alert, animated: true)
-    }
-}
-
-// MARK: - ✅ UIImage Extension for Resizing
-extension UIImage {
-    func resized(to size: CGSize) -> UIImage {
-        let renderer = UIGraphicsImageRenderer(size: size)
-        return renderer.image { _ in
-            self.draw(in: CGRect(origin: .zero, size: size))
-        }
     }
 }
